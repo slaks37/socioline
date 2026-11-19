@@ -1,0 +1,17 @@
+CREATE TABLE IF NOT EXISTS schema_versions(version int PRIMARY KEY, applied_at timestamptz DEFAULT now());
+CREATE TABLE IF NOT EXISTS guests(id uuid PRIMARY KEY, session_hash text UNIQUE NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS nodes(id uuid PRIMARY KEY,parent_id uuid REFERENCES nodes(id),kind text NOT NULL,name text NOT NULL,metadata jsonb NOT NULL DEFAULT '{}',created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now());
+CREATE TABLE IF NOT EXISTS worlds(id uuid PRIMARY KEY REFERENCES nodes(id),owner_id uuid NOT NULL REFERENCES guests(id),seed int NOT NULL,gen_version int NOT NULL,spec jsonb NOT NULL,private boolean NOT NULL DEFAULT true,revision int NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS membership(world_id uuid REFERENCES worlds(id),guest_id uuid REFERENCES guests(id),role text NOT NULL CHECK(role IN ('owner','visitor')),PRIMARY KEY(world_id,guest_id));
+CREATE TABLE IF NOT EXISTS invites(hash text PRIMARY KEY,world_id uuid REFERENCES worlds(id),expires_at timestamptz NOT NULL);
+CREATE TABLE IF NOT EXISTS chunks(world_id uuid REFERENCES worlds(id),cx int NOT NULL,cz int NOT NULL,baseline jsonb NOT NULL,generation_version int NOT NULL,PRIMARY KEY(world_id,cx,cz));
+CREATE TABLE IF NOT EXISTS modifications(world_id uuid REFERENCES worlds(id),id uuid NOT NULL,entity jsonb NOT NULL,revision int NOT NULL,PRIMARY KEY(world_id,id));
+CREATE TABLE IF NOT EXISTS occupants(world_id uuid REFERENCES worlds(id),guest_id uuid REFERENCES guests(id),x real NOT NULL,z real NOT NULL,updated_at timestamptz DEFAULT now(),PRIMARY KEY(world_id,guest_id));
+CREATE TABLE IF NOT EXISTS jobs(id uuid PRIMARY KEY,owner_id uuid REFERENCES guests(id),status text NOT NULL CHECK(status IN ('queued','running','preview','failed','saved')),request jsonb NOT NULL,spec jsonb,provider text,error text,world_id uuid REFERENCES worlds(id),attempts int DEFAULT 0,created_at timestamptz DEFAULT now());
+CREATE TABLE IF NOT EXISTS project_docs(id uuid PRIMARY KEY,world_id uuid REFERENCES worlds(id),author_id uuid REFERENCES guests(id),kind text NOT NULL,fields jsonb NOT NULL,version int NOT NULL DEFAULT 1,updated_at timestamptz DEFAULT now());
+CREATE TABLE IF NOT EXISTS npc_state(world_id uuid REFERENCES worlds(id),guest_id uuid REFERENCES guests(id),npc text NOT NULL,meetings int NOT NULL,last_seen timestamptz DEFAULT now(),PRIMARY KEY(world_id,guest_id,npc));
+CREATE TABLE IF NOT EXISTS audit_events(id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,world_id uuid REFERENCES worlds(id),guest_id uuid REFERENCES guests(id),kind text NOT NULL,detail jsonb DEFAULT '{}',at timestamptz DEFAULT now());
+CREATE TABLE IF NOT EXISTS blocks(actor uuid REFERENCES guests(id),target uuid REFERENCES guests(id),PRIMARY KEY(actor,target));
+CREATE TABLE IF NOT EXISTS reports(id uuid PRIMARY KEY,actor uuid REFERENCES guests(id),target uuid REFERENCES guests(id),world_id uuid REFERENCES worlds(id),reason text NOT NULL,created_at timestamptz DEFAULT now());
+CREATE INDEX IF NOT EXISTS jobs_pending ON jobs(created_at) WHERE status='queued';
+INSERT INTO schema_versions(version) VALUES(1) ON CONFLICT DO NOTHING;

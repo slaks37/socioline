@@ -1,0 +1,15 @@
+{
+  "database": "PostgreSQL (native embedded cluster)",
+  "realConnections": 2,
+  "checks": [
+    "Deterministic terrain and entities, negative coordinates, bounded collision",
+    "Invalid inputs rejected and unavailable model job records actual failure",
+    "Confirmation creates a private, seeded, idempotent world",
+    "Two real sessions observe shared changes, owner checks, single-use invite and concurrent conflict",
+    "Authoritative movement crosses a chunk boundary and streams the next neighborhood",
+    "Report persistence and mutual presence filtering",
+    "Preview seed restored, avatar synchronized and simulation recovered across restart",
+    "Real PostgreSQL and game-server restart recover session, location, baseline, object delta, private W3 record and NPC memory",
+    "Invalid client movement rejected"
+  ]
+}

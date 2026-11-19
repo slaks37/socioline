@@ -1,0 +1,16 @@
+{
+  "pages": 60,
+  "internalTargets": 72,
+  "schemas": {
+    "Organization": 60,
+    "WebSite": 1,
+    "WebPage": 58,
+    "Article": 1
+  },
+  "axe": {
+    "/": [],
+    "/explore": [],
+    "/the-word/encounter": [],
+    "/blog/calling-in-practice": []
+  }
+}

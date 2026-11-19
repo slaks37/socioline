@@ -1,0 +1,74 @@
+{
+  "news": [],
+  "events": [],
+  "projects": [],
+  "billboards": [
+    {
+      "name": "Faithful · Contextual · Strategic · Sustainable",
+      "path": "/about/values",
+      "x": -9,
+      "z": 18
+    },
+    {
+      "name": "Discover the W3 Journey",
+      "path": "/programs/w3-journey",
+      "x": -36,
+      "z": -3
+    },
+    {
+      "name": "Community listening guide",
+      "path": "/resources/listening-guide",
+      "x": 9,
+      "z": -3
+    },
+    {
+      "name": "Build a partnership brief",
+      "path": "/collaborate/partner",
+      "x": 35,
+      "z": -3
+    },
+    {
+      "name": "Visi SocioLine",
+      "path": "/about/vision-mission",
+      "x": 7,
+      "z": 15
+    },
+    {
+      "name": "Calling Map",
+      "path": "/the-word/discern",
+      "x": -54,
+      "z": -22
+    },
+    {
+      "name": "Community Insights",
+      "path": "/the-world/insights",
+      "x": 8,
+      "z": -22
+    },
+    {
+      "name": "Value Proposition Canvas",
+      "path": "/the-work/co-design",
+      "x": 38,
+      "z": -19
+    },
+    {
+      "name": "Business Model Canvas",
+      "path": "/the-work/mission-model",
+      "x": 54,
+      "z": -19
+    },
+    {
+      "name": "Jurnal SocioLine",
+      "path": "/blog",
+      "x": 26,
+      "z": 20
+    },
+    {
+      "name": "Agenda komunitas",
+      "path": "/events",
+      "x": 20,
+      "z": 20
+    }
+  ],
+  "blog": []
+}

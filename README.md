@@ -1,32 +1,30 @@
-# SocioLine — Digital World
+# SocioLine — From Calling to Collaborative Impact
 
-**From Calling to Collaborative Impact**
+SocioLine menghubungkan pembelajaran Firman, pengenalan komunitas, dan kerja kolaboratif. Aplikasi ini mempunyai kota 3D dengan tiga distrik, direktori program HTML, serta laboratorium untuk membuat dunia privat dan menjelajahinya bersama.
 
-SocioLine is a faith-rooted collaborative-impact ecosystem. Its flagship program integrates **The Word · The World · The Work** to translate calling, contextual understanding, and responsible action into community impact.
+## Menjalankan di komputer lokal
 
-## Product vision
+Gunakan Node.js 24 dan npm. Pada Linux, jalankan sebagai pengguna biasa agar PostgreSQL dapat menginisialisasi direktori datanya.
 
-Build a browser-based **metaverse-style 3D city** featuring original customizable stylized avatars, a fully connected walkable city, and three interactive districts:
+```sh
+npm ci
+npm run build
+npm run local -- --production
+```
 
-- **The Word** — scripture, calling, purpose, and discernment.
-- **The World** — culture, communities, research, and opportunities.
-- **The Work** — co-design, mission/business models, experiments, delivery, and impact.
+Buka http://localhost:3000/explore untuk membuat avatar dan masuk ke Central City. Ikuti petunjuk kontrol pada layar. Di Grand Library, masuk lewat pintu lalu dekati stasiun belajar untuk membuka materi Encounter. Direktori HTML tersedia langsung di halaman eksplorasi.
 
-The virtual world is the experience layer. Every public program, article, news post, and important building must link to a **server-rendered, SEO-accessible HTML page**.
+Buka http://localhost:3000/worlds untuk memulai sesi tamu dan membuat pratinjau dari deskripsi. Konfirmasi untuk memasuki dunia. Pemilik dapat membuat undangan sekali pakai untuk browser lain yang dapat menjangkau server yang sama. Simpan dokumen melalui panel Dokumen kerja W3 dan ekspor hasilnya sebagai Markdown. Sesi memerlukan cookie browser.
 
-## Start with Codex
+Untuk membuat dunia dari **gambar atau teks dengan model AI di CPU sendiri**, jalankan `npm run local -- --ai --production` sesudah build. Opsi ini membutuhkan Python 3.11 atau 3.12 dengan venv. Pada pemakaian pertama, peluncur mengunduh dependensi Python dan sekitar 156 MB bobot serta tokenizer CLIP. Buka /worlds, pilih **Model AI · teks atau gambar**, lalu buat pratinjau.
 
-1. Read [`docs/socioline-reference/CODEX_MASTER_PROMPT.md`](docs/socioline-reference/CODEX_MASTER_PROMPT.md).
-2. Read the city masterplan, branding and organizational blueprint in the same folder.
-3. Implement and verify a **playable vertical slice**: avatar selection → spawn in Central Plaza → walk to a building → interact → open accessible HTML content.
-4. Expand only after basic gameplay and SEO acceptance checks pass.
+Untuk pengembangan jalankan `npm run local`. PostgreSQL lokal dibuat di `.world-data`. Pengaturan basis data eksternal dan model opsional dijelaskan dalam [panduan operasi](docs/ai-world/DEPLOYMENT_GUIDE.md).
 
-See [`METAVERSE_ACCEPTANCE_CHECKLIST.md`](docs/socioline-reference/METAVERSE_ACCEPTANCE_CHECKLIST.md).
+## Sumber dan verifikasi
 
-## Status
+- [Masterplan implementasi dan status fase](docs/ai-world/MASTERPLAN_V3.md)
+- [Bukti uji dan perintah reproduksi](docs/ai-world/ACCEPTANCE_TESTS.md)
+- [Tangkapan runtime, termasuk interior dan dunia buatan](docs/qa-v3/)
+- [Masterplan kota dan sumber identitas SocioLine](docs/socioline-reference/)
 
-**Planning/reference repository starter only.** No working web app, game engine, backend, or deployment is included yet. All program facts, financial data, news, and public impact claims require validation before publication.
-
-## Suggested stack
-
-Next.js App Router, TypeScript, React Three Fiber/Three.js, an accessible server-rendered content layer, and a structured headless CMS.
+Lingkungan yang diuji adalah satu server lokal. Central City merupakan pengalaman pemain tunggal. Ruang multipemain menggunakan dunia privat hasil generator. Performa 3D pada perangkat fisik masih perlu diukur.

@@ -1,0 +1,65 @@
+[
+  {
+    "path": "/",
+    "run": 1,
+    "LCP": 292,
+    "CLS": 0,
+    "INP": 8
+  },
+  {
+    "path": "/",
+    "run": 2,
+    "LCP": 308,
+    "CLS": 0,
+    "INP": 8
+  },
+  {
+    "path": "/",
+    "run": 3,
+    "LCP": 384,
+    "CLS": 0,
+    "INP": 16
+  },
+  {
+    "path": "/the-word/encounter",
+    "run": 1,
+    "LCP": 136,
+    "CLS": 0,
+    "INP": 16
+  },
+  {
+    "path": "/the-word/encounter",
+    "run": 2,
+    "LCP": 136,
+    "CLS": 0,
+    "INP": 16
+  },
+  {
+    "path": "/the-word/encounter",
+    "run": 3,
+    "LCP": 192,
+    "CLS": 0,
+    "INP": 16
+  },
+  {
+    "path": "/resources/listening-guide",
+    "run": 1,
+    "LCP": 184,
+    "CLS": 0,
+    "INP": 16
+  },
+  {
+    "path": "/resources/listening-guide",
+    "run": 2,
+    "LCP": 136,
+    "CLS": 0,
+    "INP": 16
+  },
+  {
+    "path": "/resources/listening-guide",
+    "run": 3,
+    "LCP": 164,
+    "CLS": 0,
+    "INP": 16
+  }
+]

@@ -1,0 +1,36 @@
+[
+  {
+    "input": "Create a tropical village surrounded by mountains, containing a school, a market, a river, farmland, and a community center.",
+    "provider": "CLIP-ViT-B32-CPU",
+    "spec": {
+      "name": "Desa Tropis",
+      "type": "village",
+      "biome": "tropical",
+      "terrain": "mountain",
+      "features": [
+        "school",
+        "market",
+        "farm",
+        "community",
+        "river"
+      ]
+    },
+    "jobMilliseconds": 990
+  },
+  {
+    "input": "public/district-0.webp",
+    "provider": "CLIP-ViT-B32-CPU",
+    "spec": {
+      "name": "Kampus Hijau",
+      "type": "campus",
+      "biome": "temperate",
+      "terrain": "plain",
+      "features": [
+        "school",
+        "community",
+        "market"
+      ]
+    },
+    "jobMilliseconds": 684
+  }
+]
