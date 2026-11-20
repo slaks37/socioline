@@ -17,11 +17,13 @@ export type Input = {
   tilt: number;
 };
 export type Location = { x: number; z: number; id: string };
+export type Pose = { x: number; y: number; z: number; facing: number };
 export type GameProps = {
+  pose: React.RefObject<Pose>;
   avatar: AvatarData;
   paused: boolean;
   input: React.RefObject<Input>;
-  travel: { x: number; z: number; seq: number };
+  travel: { x: number; z: number; seq: number; resume?: Pose };
   report: (l: Location) => void;
   quality: string;
   inside: boolean;
@@ -30,11 +32,13 @@ export type GameProps = {
   onFail: () => void;
 };
 function Player({
+  pose,
   avatar,
   paused,
   input,
   travel,
   report,
+  onFail,
   inside,
   panorama,
   distance,
@@ -47,6 +51,11 @@ function Player({
     reported = useRef<Location | null>(null),
     snap = useRef(true);
   const { gl, camera } = useThree();
+  useEffect(() => {
+    const canvas = gl.domElement;
+    canvas.addEventListener("webglcontextlost", onFail);
+    return () => canvas.removeEventListener("webglcontextlost", onFail);
+  }, [gl, onFail]);
   const target = useRef(new T.Vector3());
   const reduced = useRef(false);
   useEffect(() => {
@@ -62,11 +71,11 @@ function Player({
     if (root.current) {
       root.current.position.set(
         travel.x,
-        ground(travel.x, travel.z, inside, 0),
+        travel.resume?.y ?? ground(travel.x, travel.z, inside, 0),
         travel.z,
       );
-      input.current.turn = 0;
-      root.current.rotation.y = Math.PI;
+      if (!travel.resume) input.current.turn = 0;
+      root.current.rotation.y = travel.resume?.facing ?? Math.PI;
       vy.current = 0;
       snap.current = true;
     }
@@ -75,6 +84,9 @@ function Player({
     const pressed = keys.current;
     pressed.clear();
     if (paused) {
+      input.current.dx = 0;
+      input.current.dz = 0;
+      input.current.jump = false;
       speed.current = 0;
       return;
     }
@@ -239,6 +251,10 @@ function Player({
         p.z - Math.cos(c.turn) * 2.7,
       );
     }
+    pose.current.x = p.x;
+    pose.current.y = p.y;
+    pose.current.z = p.z;
+    pose.current.facing = g.rotation.y;
     snap.current = false;
     timer.current += dt;
     if (timer.current > 0.13) {
@@ -324,19 +340,39 @@ function Adaptive({ onChange }: { onChange: (value: number) => void }) {
   });
   return null;
 }
+function StudioCamera({ portrait }: { portrait: boolean }) {
+  const { camera, size } = useThree();
+  useEffect(() => {
+    const targetY = portrait ? 1.61 : 1.0;
+    const height = portrait ? 0.91 : 2.24;
+    const width = portrait ? 0.72 : 0.9;
+    const aperture = Math.tan(T.MathUtils.degToRad(16));
+    const distance =
+      Math.max(height, (width * size.height) / size.width) / (2 * aperture);
+    camera.position.set(0, targetY + 0.04, distance);
+    camera.lookAt(0, targetY, 0);
+  }, [camera, size, portrait]);
+  return null;
+}
 export function Preview({
   avatar,
   rotation,
+  portrait,
 }: {
   avatar: AvatarData;
   rotation: number;
+  portrait: boolean;
 }) {
   return (
-    <Canvas
-      camera={{ position: [0, 1.15, 3.45], fov: 38 }}
-      onCreated={({ camera }) => camera.lookAt(0, 1, 0)}
-    >
-      <Lighting />
+    <Canvas camera={{ position: [0, 1.65, 2], fov: 32 }} dpr={[1, 1.6]}>
+      <StudioCamera portrait={portrait} />
+      <hemisphereLight args={["#fff5e7", "#c3d4dc", 1.45]} />
+      <directionalLight position={[-3, 4, 5]} intensity={1.8} color="#fff0df" />
+      <directionalLight
+        position={[2, 2, -3]}
+        intensity={1.65}
+        color="#d8eeff"
+      />
       <group rotation-y={rotation}>
         <Avatar data={avatar} />
       </group>
@@ -349,6 +385,7 @@ export default function GameScene(props: GameProps) {
   const l = interactives.find((l) => l.id === near);
   return (
     <Canvas
+      frameloop={props.paused ? "demand" : "always"}
       gl={{
         antialias: false,
         alpha: false,
@@ -366,9 +403,6 @@ export default function GameScene(props: GameProps) {
       onCreated={({ gl }) => {
         gl.shadowMap.autoUpdate = false;
         gl.shadowMap.needsUpdate = true;
-        gl.domElement.addEventListener("webglcontextlost", props.onFail, {
-          once: true,
-        });
       }}
     >
       <color attach="background" args={["#cdded2"]} />

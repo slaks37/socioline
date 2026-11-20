@@ -100,13 +100,19 @@ try {
   await page.keyboard.press("e");
   const dialog = page.getByRole("dialog");
   await dialog.waitFor();
-  assert.equal(
-    await dialog.getByRole("link").first().getAttribute("href"),
-    "/the-word/encounter",
-  );
+  const fullArticle = dialog.getByRole("link", { name: "Baca halaman lengkap" });
+  assert.equal(await fullArticle.getAttribute("href"), "/the-word/encounter");
   await shot("08-learning");
+  const avatarPosition = await page.locator(".mini").getAttribute("aria-label");
+  const cityCanvas = await page.locator(".game canvas").elementHandle();
+  await fullArticle.click();
+  const article = dialog.frameLocator("iframe");
+  await article.getByRole("heading", { level: 1, name: "Encounter — Menjumpai misi Allah" }).waitFor();
+  await article.getByRole("link").first().focus();
   await page.keyboard.press("Escape");
-  await page.locator(".game canvas").focus();
+  await dialog.waitFor({ state: "detached" });
+  assert.equal(await page.locator(".mini").getAttribute("aria-label"), avatarPosition);
+  assert.ok(await cityCanvas.evaluate((el) => el.isConnected && el === document.activeElement));
   await walk("s", button("Keluar perpustakaan"));
   await page.keyboard.press("e");
   await page.locator(".hud b").filter({ hasText: "The Word" }).waitFor();

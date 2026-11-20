@@ -104,7 +104,9 @@ export default function Home() {
           <h2>
             Jelajahi distrik<span>.</span>
           </h2>
-          <p>Satu perjalanan dari panggilan menuju karya bersama.</p>
+          <Link className="secondary" href="/resources/canvas" prefetch={false}>
+            <BookOpen size={17} aria-hidden="true" /> Buka canvas belajar W3
+          </Link>
         </div>
         <div className="cards">
           {districts.map((d, i) => {

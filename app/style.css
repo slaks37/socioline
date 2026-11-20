@@ -584,15 +584,32 @@ dialog p {
   inset: 0;
 }
 .preview > .eyebrow,
-.preview > .secondary {
+.studio-camera {
   position: absolute;
   z-index: 1;
   left: 20px;
   top: 20px;
 }
-.preview > .secondary {
+.studio-camera {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
   top: auto;
   bottom: 16px;
+}
+.studio-camera .secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+}
+.studio-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.studio .studio-choices button {
+  margin: 0;
 }
 .options {
   padding: 25px;
@@ -1139,3 +1156,42 @@ body:has(.game) .directory {
   aspect-ratio: 4/3;
 }
 .world-lab{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr));gap:20px;align-items:start}.world-lab>section,.shared-room details{border:1px solid var(--line);padding:22px;border-radius:9px;background:#fffef8}.world-lab h2,.room-heading h2{font:600 32px/1.1 var(--display);margin:0 0 16px}.world-lab label,.shared-room label{display:grid;gap:6px;margin:12px 0;font-weight:650}.world-lab textarea,.world-lab input,.world-lab select,.shared-room textarea,.shared-room input,.shared-room select{font:inherit;color:var(--ink);border:1px solid #adbbb0;border-radius:5px;padding:9px;background:#fff;max-width:100%}.world-lab .secondary,.shared-room .secondary{margin:6px 6px 6px 0}.world-preview{margin-top:14px;padding:14px;border-left:3px solid #5b877a;background:#eef2e8}.room-heading{display:flex;align-items:center;justify-content:space-between;gap:15px}.realm-scene{height:min(60vh,550px);min-height:320px;background:#dbe6df;position:relative;border-radius:8px;overflow:hidden}.realm-scene canvas{touch-action:none}.realm-coords{position:absolute;top:8px;left:8px;background:#17343ee8;color:white;padding:6px 9px;font:12px var(--mono);border-radius:3px}.shared-room details{margin:12px 0}.shared-room details summary{font-weight:700}.world-lab p,.shared-room p{line-height:1.65}.shared-room a{text-decoration:underline}
+
+.city-reading-links {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+.game dialog.city-reader {
+  width: min(860px, 96vw);
+  max-height: 94svh;
+  padding: 0;
+  overflow: hidden;
+}
+.city-reader-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.game .city-reader-bar h2 {
+  flex: 1 1 190px;
+  margin: 0;
+  font-size: clamp(18px, 3vw, 25px);
+}
+.city-reader-frame {
+  display: block;
+  width: 100%;
+  height: min(70svh, 760px);
+  border: 0;
+}
+html[data-city-reader] body > header,
+html[data-city-reader] body > footer,
+html[data-city-reader] body > .skip,
+html[data-city-reader] .article > .crumb,
+html[data-city-reader] .reading > a[href^="/explore"] {
+  display: none;
+}

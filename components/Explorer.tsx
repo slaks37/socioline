@@ -1,5 +1,6 @@
 "use client";
 import Ambience from "./Ambience";
+import CityReader, { ReadingLink, type Reading } from "./CityReader";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import {
@@ -17,17 +18,19 @@ import {
   MapPin,
   Pause,
   Navigation,
-  ArrowUpRight,
 } from "lucide-react";
 import {
   initialAvatar,
   validAvatar,
   hairStyles,
+  hairLabels,
+  faceDesigns,
+  defaultFace,
   skinTones,
   outfits,
   type AvatarData,
 } from "./avatar-data";
-import type { Input, Location } from "./GameScene";
+import type { Input, Location, Pose } from "./GameScene";
 import { interactives, districts, findPage } from "../lib/content";
 const World = dynamic(() => import("./GameScene"), { ssr: false });
 const Preview = dynamic(() => import("./GameScene").then((m) => m.Preview), {
@@ -53,41 +56,82 @@ const travelPoints = [
   ...districts.map((d) => ({ name: d.name, x: d.x, z: -18 })),
 ];
 const key = "socioline.avatar.v1";
+const canvasWeeks: Record<string, number> = {
+  "/the-word/encounter": 1,
+  "/the-word/understand": 1,
+  "/the-word/discern": 2,
+  "/the-word/commit": 3,
+  "/the-world/explore": 4,
+  "/the-world/encounter": 4,
+  "/the-world/listen": 5,
+  "/the-world/research": 5,
+  "/resources/listening-guide": 5,
+  "/the-world/understand": 6,
+  "/the-world/insights": 6,
+  "/the-world/opportunities": 6,
+  "/the-work/co-design": 7,
+  "/the-work/mission-model": 8,
+  "/the-work/venture-studio": 9,
+  "/the-work/experiment": 10,
+  "/the-work/serve": 11,
+  "/the-work/multiply": 12,
+};
 function Modal({
   children,
   close,
   title,
+  reading = false,
 }: {
+  reading?: boolean;
   children: ReactNode;
   close: () => void;
   title: string;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const resumeButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (reading) resumeButton.current?.focus({ preventScroll: true });
+  }, [reading]);
   useEffect(() => {
     const d = dialog.current;
     const old = document.activeElement as HTMLElement;
     d?.showModal();
     return () => {
       d?.close();
-      if (old?.isConnected) old.focus();
-      else document.querySelector<HTMLCanvasElement>(".game canvas")?.focus();
+      const canvas = document.querySelector<HTMLCanvasElement>(".game canvas");
+      if (canvas) canvas.focus({ preventScroll: true });
+      else if (old?.isConnected) old.focus({ preventScroll: true });
     };
   }, []);
   return (
     <dialog
       ref={dialog}
+      className={reading ? "city-reader" : undefined}
       onCancel={(e) => {
         e.preventDefault();
         close();
       }}
       aria-label={title}
     >
-      <span className="eyebrow">WORLD ATLAS</span>
-      <h2>{title}</h2>
+      {reading ? (
+        <div className="city-reader-bar">
+          <h2>{title}</h2>
+          <button className="button dark" ref={resumeButton} onClick={close}>
+            Lanjutkan menjelajah
+          </button>
+        </div>
+      ) : (
+        <>
+          <span className="eyebrow">WORLD ATLAS</span>
+          <h2>{title}</h2>
+        </>
+      )}
       {children}
-      <button className="secondary" onClick={close}>
-        Kembali ke kota
-      </button>
+      {!reading && (
+        <button className="secondary" onClick={close}>
+          Lanjutkan menjelajah
+        </button>
+      )}
     </dialog>
   );
 }
@@ -95,11 +139,30 @@ export default function Explorer() {
   const [avatar, setAvatar] = useState(initialAvatar),
     [remember, setRemember] = useState(false),
     [playing, play] = useState(false),
-    [rotation, rotate] = useState(0.2),
+    [rotation, rotate] = useState(0.18),
+    [portrait, setPortrait] = useState(true),
     [supported, webgl] = useState<boolean | null>(null),
     [modal, open] = useState(""),
     [quality, qualitySet] = useState("Balanced");
-  const [travel, setTravel] = useState({ ...travelPoints[0], seq: 0 }),
+  const [reader, setReader] = useState<Reading | null>(null);
+  const [editing, setEditing] = useState(false);
+  const pose = useRef<Pose>({ x: 0, y: 0, z: 43, facing: Math.PI });
+  const closePanel = useCallback(() => {
+    open("");
+    setReader(null);
+  }, []);
+  const editAvatar = () => {
+    setEditing(true);
+    play(false);
+    closePanel();
+  };
+  const [travel, setTravel] = useState<{
+      x: number;
+      z: number;
+      seq: number;
+      name: string;
+      resume?: Pose;
+    }>({ ...travelPoints[0], seq: 0 }),
     [loc, setLoc] = useState<Location>({ x: 0, z: 25, id: "" });
   const input = useRef<Input>({ dx: 0, dz: 0, jump: false, turn: 0, tilt: 4 });
   const [inside, setInside] = useState(false),
@@ -141,6 +204,7 @@ export default function Explorer() {
     webgl(false);
     play(false);
     open("");
+    setReader(null);
     document
       .querySelector<HTMLDetailsElement>("#directory")
       ?.setAttribute("open", "");
@@ -184,6 +248,19 @@ export default function Explorer() {
       if (remember) localStorage.setItem(key, JSON.stringify(avatar));
       else localStorage.removeItem(key);
     } catch {}
+    if (editing) {
+      const resume = { ...pose.current };
+      setTravel((t) => ({
+        name: t.name,
+        x: resume.x,
+        z: resume.z,
+        resume,
+        seq: t.seq + 1,
+      }));
+      setEditing(false);
+      play(true);
+      return;
+    }
     const target = interactives.find(
       (l) =>
         l.id === new URLSearchParams(window.location.search).get("landmark"),
@@ -202,6 +279,18 @@ export default function Explorer() {
   };
   const near = interactives.find((l) => l.id === loc.id),
     selected = interactives.find((l) => l.id === modal);
+  const selectedPage = selected && findPage(selected.url);
+  const week = selected && canvasWeeks[selected.url];
+  const libraryLink =
+    selected &&
+    (week ||
+      [
+        "/resources",
+        "/programs",
+        "/programs/w3-journey",
+        "/about/framework",
+        "/the-word/resources",
+      ].includes(selected.url));
   const zone = inside
     ? "Grand Library"
     : loc.z > 1
@@ -255,15 +344,27 @@ export default function Explorer() {
             <span className="eyebrow">PRATINJAU KARAKTER</span>
             {supported && (
               <Guard fail={fail}>
-                <Preview avatar={avatar} rotation={rotation} />
+                <Preview
+                  avatar={avatar}
+                  rotation={rotation}
+                  portrait={portrait}
+                />
               </Guard>
             )}
-            <button
-              className="secondary"
-              onClick={() => rotate((r) => r + Math.PI / 4)}
-            >
-              <RotateCw size={15} /> Putar
-            </button>
+            <section className="studio-camera" aria-label="Kamera pratinjau">
+              <button
+                className="secondary"
+                onClick={() => setPortrait((p) => !p)}
+              >
+                {portrait ? "Lihat seluruh tubuh" : "Lihat wajah"}
+              </button>
+              <button
+                className="secondary"
+                onClick={() => rotate((r) => r + Math.PI / 4)}
+              >
+                <RotateCw size={15} /> Putar
+              </button>
+            </section>
           </div>
           <div className="options">
             <fieldset>
@@ -274,21 +375,37 @@ export default function Explorer() {
                   aria-pressed={avatar.preset === p}
                   onClick={() => change({ preset: p })}
                 >
-                  {p}
+                  {p === "Male" ? "Laki-laki" : "Perempuan"}
                 </button>
               ))}
             </fieldset>
             <fieldset>
+              <legend>Inspirasi wajah Nusantara</legend>
+              <div className="studio-choices">
+                {faceDesigns.map(({ id, label }) => (
+                  <button
+                    key={id}
+                    aria-pressed={(avatar.face ?? defaultFace) === id}
+                    onClick={() => change({ face: id })}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <fieldset>
               <legend>Gaya rambut</legend>
-              {hairStyles.map((h) => (
-                <button
-                  key={h}
-                  aria-pressed={avatar.hair === h}
-                  onClick={() => change({ hair: h })}
-                >
-                  {h}
-                </button>
-              ))}
+              <div className="studio-choices">
+                {hairStyles.map((h) => (
+                  <button
+                    key={h}
+                    aria-pressed={avatar.hair === h}
+                    onClick={() => change({ hair: h })}
+                  >
+                    {hairLabels[h]}
+                  </button>
+                ))}
+              </div>
             </fieldset>
             <fieldset>
               <legend>Warna rambut</legend>
@@ -364,7 +481,7 @@ export default function Explorer() {
               onClick={save}
             >
               <Compass size={18} />
-              Masuk ke Central Plaza
+              {editing ? "Lanjutkan menjelajah" : "Masuk ke Central Plaza"}
               <ArrowRight size={16} />
             </button>
           </div>
@@ -376,6 +493,7 @@ export default function Explorer() {
             <World
               {...{
                 avatar,
+                pose,
                 input,
                 travel,
                 quality,
@@ -475,26 +593,32 @@ export default function Explorer() {
           </button>
           {modal && (
             <Modal
-              close={() => open("")}
+              close={closePanel}
+              reading={!!reader}
               title={
+                reader?.title ??
                 selected?.name ??
                 (modal === "pause" ? "Pengaturan kota" : "Peta dan perjalanan")
               }
             >
-              {selected ? (
+              {reader ? (
+                <CityReader page={reader} resume={closePanel} />
+              ) : selected ? (
                 <>
                   <p>
-                    {findPage(selected.url)?.intro ??
-                      "Explore the city and customize your guest character."}
+                    {selectedPage?.intro ??
+                      (selected.id === "travel-station"
+                        ? "Pilih tujuan untuk berpindah ke distrik lain."
+                        : selected.id === "avatar-studio"
+                          ? "Ubah tampilan avatarmu di studio."
+                          : "Jelajahi ruang untuk merancang dunia bersama.")}
                   </p>
-                  {findPage(selected.url)
-                    ?.sections.slice(0, 2)
-                    .map(([heading, body]) => (
-                      <section key={heading}>
-                        <h3>{heading}</h3>
-                        <p>{body}</p>
-                      </section>
-                    ))}
+                  {selectedPage?.sections.slice(0, 2).map(([heading, body]) => (
+                    <section key={heading}>
+                      <h3>{heading}</h3>
+                      <p>{body}</p>
+                    </section>
+                  ))}
                   {selected.id === "travel-station" && (
                     <button
                       className="secondary"
@@ -504,19 +628,47 @@ export default function Explorer() {
                     </button>
                   )}
                   {selected.id === "avatar-studio" && (
-                    <button
-                      className="secondary"
-                      onClick={() => {
-                        play(false);
-                        open("");
-                      }}
-                    >
+                    <button className="secondary" onClick={editAvatar}>
                       Sesuaikan avatar ini
                     </button>
                   )}
-                  <a className="button dark" href={selected.url}>
-                    Baca halaman lengkap <ArrowUpRight size={16} />
-                  </a>
+                  <div className="city-reading-links">
+                    {selected.url !== "/explore" && (
+                      <ReadingLink
+                        page={{
+                          url: selected.url,
+                          title: selectedPage?.title ?? selected.name,
+                        }}
+                        open={setReader}
+                      >
+                        {selected.url === "/worlds"
+                          ? "Buka Lab Dunia"
+                          : "Baca halaman lengkap"}
+                      </ReadingLink>
+                    )}
+                    {week && (
+                      <ReadingLink
+                        page={{
+                          url: "/resources/canvas/" + week,
+                          title: "Canvas minggu " + week,
+                        }}
+                        open={setReader}
+                      >
+                        Isi canvas minggu {week}
+                      </ReadingLink>
+                    )}
+                    {libraryLink && (
+                      <ReadingLink
+                        page={{
+                          url: "/resources/canvas",
+                          title: "Pustaka canvas W3",
+                        }}
+                        open={setReader}
+                      >
+                        Buka pustaka canvas
+                      </ReadingLink>
+                    )}
+                  </div>
                 </>
               ) : modal === "travel" ? (
                 <>
@@ -574,13 +726,7 @@ export default function Explorer() {
                       ))}
                     </select>
                   </label>
-                  <button
-                    className="secondary"
-                    onClick={() => {
-                      play(false);
-                      open("");
-                    }}
-                  >
+                  <button className="secondary" onClick={editAvatar}>
                     Sesuaikan avatar
                   </button>
                 </>

@@ -67,6 +67,29 @@ export default async function PublicPage({ params }: Props) {
         />
       )}
       <div className="reading">
+        {[
+          "/resources",
+          "/programs",
+          "/programs/w3-journey",
+          "/the-word/program",
+          "/the-world/program",
+          "/the-work/program",
+        ].includes(p.path) && (
+          <section>
+            <h2>Canvas belajar W3</h2>
+            <p>
+              Pilih satu dari 12 lembar mingguan untuk menjawab pertanyaan,
+              mencatat bukti praktik, dan meninjau perkembangan bersama mentor.
+            </p>
+            <Link
+              prefetch={false}
+              className="button dark"
+              href="/resources/canvas"
+            >
+              Buka canvas belajar <ArrowUpRight size={17} />
+            </Link>
+          </section>
+        )}
         {p.sections.map(([h, b]) => (
           <section key={h}>
             <h2>{h}</h2>
