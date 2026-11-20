@@ -76,7 +76,7 @@ try {
   await page.waitForFunction(() =>
     performance
       .getEntriesByType("resource")
-      .some((e) => e.name.includes("grand-library.glb")),
+      .some((e) => e.name.includes("/models/grand-library")),
   );
   await page.waitForTimeout(1500);
   rates.desktop = await frameRate(page);

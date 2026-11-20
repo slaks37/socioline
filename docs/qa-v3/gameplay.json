@@ -1,8 +1,8 @@
 {
   "renderer": "Chromium headless / ANGLE SwiftShader",
   "framesPerSecond": {
-    "desktop": 0.5,
-    "mobile": 1.1
+    "desktop": 6.6,
+    "mobile": 7
   },
   "desktop": "1120x700 balanced",
   "mobile": "390x780 low, touch emulation"

@@ -44,6 +44,7 @@ function Player({
     speed = useRef(0),
     vy = useRef(0),
     timer = useRef(0),
+    reported = useRef<Location | null>(null),
     snap = useRef(true);
   const { gl, camera } = useThree();
   const target = useRef(new T.Vector3());
@@ -264,7 +265,12 @@ function Player({
           closest = l.id;
         }
       }
-      report({ x: p.x, z: p.z, id: closest });
+      const last = reported.current;
+      if (!last || last.x !== p.x || last.z !== p.z || last.id !== closest) {
+        const next = { x: p.x, z: p.z, id: closest };
+        reported.current = next;
+        report(next);
+      }
     }
   });
   return (
@@ -299,25 +305,22 @@ function ShadowRefresh({
   }, [gl, quality, travel]);
   return null;
 }
-function Adaptive({ enabled }: { enabled: boolean }) {
-  const { setDpr } = useThree();
-  const avg = useRef(0),
-    frames = useRef(0);
+function Adaptive({ onChange }: { onChange: (value: number) => void }) {
+  const elapsed = useRef(0),
+    frames = useRef(0),
+    fast = useRef(0);
   useFrame((_, dt) => {
-    if (!enabled) return;
-    avg.current += dt;
+    elapsed.current += dt;
     frames.current++;
-    if (avg.current >= 2 && frames.current >= 3) {
-      setDpr(
-        avg.current / frames.current > 0.12
-          ? 0.5
-          : avg.current / frames.current > 0.04
-            ? 0.75
-            : Math.min(window.devicePixelRatio, 1.5),
-      );
-      avg.current = 0;
-      frames.current = 0;
-    }
+    if (elapsed.current < 2 || frames.current < 3) return;
+    const duration = elapsed.current / frames.current;
+    fast.current = duration < 0.025 ? fast.current + 1 : 0;
+    if (duration > 0.12) onChange(0.5);
+    else if (duration > 0.04) onChange(0.75);
+    else if (fast.current >= 3)
+      onChange(Math.min(window.devicePixelRatio, 1.5));
+    elapsed.current = 0;
+    frames.current = 0;
   });
   return null;
 }
@@ -342,11 +345,23 @@ export function Preview({
 }
 export default function GameScene(props: GameProps) {
   const [near, setNear] = useState("");
+  const [balancedDpr, setBalancedDpr] = useState(1);
   const l = interactives.find((l) => l.id === near);
   return (
     <Canvas
-      shadows={props.quality !== "Low" ? { type: T.PCFShadowMap } : false}
-      dpr={props.quality === "Low" ? 0.72 : props.quality === "High" ? 1.45 : 1}
+      gl={{
+        antialias: false,
+        alpha: false,
+        powerPreference: "high-performance",
+      }}
+      shadows={props.quality === "High" ? { type: T.PCFShadowMap } : false}
+      dpr={
+        props.quality === "Low"
+          ? 0.72
+          : props.quality === "High"
+            ? 1.45
+            : balancedDpr
+      }
       camera={{ far: 440, near: 0.1, fov: 61 }}
       onCreated={({ gl }) => {
         gl.shadowMap.autoUpdate = false;
@@ -363,10 +378,13 @@ export default function GameScene(props: GameProps) {
       />
       <ShadowRefresh quality={props.quality} travel={props.travel.seq} />
       <Lighting />
-      <Landscape low={props.quality === "Low"} />
+      <Landscape
+        low={props.quality === "Low"}
+        high={props.quality === "High"}
+      />
       <City />
       <Signs />
-      <Adaptive enabled={props.quality === "Balanced"} />
+      {props.quality === "Balanced" && <Adaptive onChange={setBalancedDpr} />}
       {l && (
         <mesh position={[l.x, 0.41, l.z]} rotation-x={-Math.PI / 2}>
           <ringGeometry args={[1.04, 1.12, 32]} />

@@ -1,3 +1,4 @@
+import "./sky.mjs";
 import { kit, stone, metal, tau } from "./kit.mjs";
 const wood = "#9b6948",
   warm = "#f0d7ae",

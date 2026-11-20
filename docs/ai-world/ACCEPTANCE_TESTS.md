@@ -19,4 +19,15 @@ Perintah berikut dijalankan dari root proyek pada Node 24. Browser memakai Chrom
 
 Uji dunia menolak masukan tidak valid dan mencatat kegagalan penyedia model. Dua sesi berbagi perubahan yang dikonfirmasi. Pengunjung tidak dapat mengubah objek milik pemilik. Satu dari dua penulisan bersaing menerima 409. Pengujian juga mencakup gerak melintasi chunk, tabrakan, blokir, visibilitas, kosmetik dan dokumen privat. Setelah backend serta PostgreSQL dimulai ulang, klien membaca kembali lokasi, baseline, objek, simulasi dan pertemuan NPC.
 
-Performa gameplay berstatus **PARTIAL**. Chromium SwiftShader mencatat 0,5 FPS pada 1120 × 700 dan 1,1 FPS pada emulasi sentuh 390 × 780. Targetnya 60/30 FPS. Sembilan sampel halaman HTML memberikan LCP 136–384 ms, CLS 0 dan INP 8–16 ms pada mesin lokal. Emulasi viewport dan sentuhan tidak memverifikasi kinerja atau ergonomi ponsel fisik. Evaluasi mutu lintas gambar, pengujian beban, audit aksesibilitas manual serta latihan pemulihan cadangan masih terbuka.
+Performa gameplay berstatus **PARTIAL**. Pada uji alur permainan, Chromium SwiftShader mencatat 6,6 FPS pada viewport 1120 × 700 di Welcome Terrace dan 7,0 FPS pada emulasi sentuh 390 × 780 di Grand Library. Pada rilis sebelumnya, uji ini mencatat masing-masing 0,5 dan 1,1 FPS. Targetnya 60/30 FPS. Sembilan sampel halaman HTML memberikan LCP 136–384 ms, CLS 0 dan INP 8–16 ms pada mesin lokal. Emulasi viewport dan sentuhan tidak memverifikasi kinerja atau ergonomi ponsel fisik. Evaluasi mutu lintas gambar, pengujian beban, audit aksesibilitas manual serta latihan pemulihan cadangan masih terbuka.
+
+## Perbandingan render di Welcome Terrace
+
+Kedua build diuji berurutan dengan Chromium SwiftShader, kamera diam, viewport dan preset yang sama. Setelah pemuatan dan pemanasan, pengukuran berjalan sekurangnya 15 frame dan lima detik. FPS mengukur interval requestAnimationFrame. Panggilan WebGL dan segitiga dihitung pada canvas permainan. Ini satu sampel lokal per build dan preset.
+
+| Preset | Resolusi render | FPS sebelum → sesudah | Panggilan gambar per frame | Segitiga per frame |
+|---|---|---|---|---|
+| Desktop Balanced | 560 × 350 | 0.84 → 6.32 | 475 → 167 | 358074 → 142292 |
+| Emulasi sentuh Low | 280 × 561 | 2.42 → 8.74 | 215 → 112 | 196874 → 117940 |
+
+Jalankan `QA_URL=http://localhost:3000 node scripts/city-benchmark.mjs` dari direktori proyek. Data perbandingan ada dalam [city-before.json](../qa-v3/city-before.json) dan [city-after.json](../qa-v3/city-after.json).

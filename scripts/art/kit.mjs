@@ -1,5 +1,6 @@
 // Original architectural kit. Repeated components share geometry and material in glTF.
 import * as T from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
 import { writeFile } from "node:fs/promises";
 globalThis.FileReader = class {
@@ -199,6 +200,50 @@ export function kit() {
         scene.add(mesh);
       }
     }
+    const coarse = new Map([
+      [types.get("orb"), new T.SphereGeometry(1, 7, 4)],
+      [types.get("cyl"), new T.CylinderGeometry(1, 1, 1, 12)],
+      [types.get("strut"), new T.CylinderGeometry(1, 1, 1, 3)],
+    ]);
+    const distant = new T.Scene(),
+      groups = [[], []];
+    for (const { g, material, m } of buffers.values()) {
+      const source = coarse.get(g) ?? g;
+      for (const transform of m) {
+        const size = new T.Vector3().setFromMatrixScale(transform);
+        if (source !== g || g === types.get("box")) {
+          if (Math.max(size.x, size.y, size.z) < 0.85) continue;
+          if (g === types.get("strut") && size.x < 0.07) continue;
+        }
+        const geometry = source.clone().applyMatrix4(transform);
+        geometry.deleteAttribute("uv");
+        const vertices = geometry.getAttribute("position").count;
+        const colors = new Uint8Array(vertices * 3);
+        const rgb = material.color
+          .toArray()
+          .map((channel) => Math.round(channel * 255));
+        for (let v = 0; v < vertices; v++) colors.set(rgb, v * 3);
+        geometry.setAttribute("color", new T.BufferAttribute(colors, 3, true));
+        groups[Number(material.transparent)].push(geometry);
+      }
+    }
+    for (const [index, geometries] of groups.entries()) {
+      if (!geometries.length) continue;
+      const material = new T.MeshStandardMaterial({
+        vertexColors: true,
+        transparent: !!index,
+        opacity: index ? 0.28 : 1,
+        side: index ? T.DoubleSide : T.FrontSide,
+      });
+      distant.add(new T.Mesh(mergeGeometries(geometries), material));
+    }
+    const distantBytes = await new GLTFExporter().parseAsync(distant, {
+      binary: true,
+    });
+    await writeFile(
+      "public/models/" + name + "-far.glb",
+      Buffer.from(distantBytes),
+    );
     const bytes = await new GLTFExporter().parseAsync(scene, { binary: true });
     await writeFile("public/models/" + name + ".glb", Buffer.from(bytes));
   }

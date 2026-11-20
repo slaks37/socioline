@@ -1,8 +1,9 @@
 "use client";
-import { Suspense, useEffect, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useLoader, useThree } from "@react-three/fiber";
 import * as T from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { landmarks } from "../lib/content";
 import { initialAvatar } from "./avatar-data";
@@ -14,23 +15,74 @@ export const heroSites = [
   { id: "global-discovery-center", file: "discovery-center", x: 0, z: -36 },
   { id: "innovation-campus", file: "innovation-campus", x: 46, z: -36 },
 ];
-function Asset({ file, x, z }: { file: string; x: number; z: number }) {
-  const { scene } = useLoader(GLTFLoader, "/models/" + file + ".glb");
-  useEffect(() => {
-    scene.traverse((o) => {
-      if (o instanceof T.Mesh) {
-        o.castShadow = !o.material.transparent;
-        o.receiveShadow = true;
+function Asset({
+  file,
+  x,
+  z,
+  distant = false,
+}: {
+  file: string;
+  x: number;
+  z: number;
+  distant?: boolean;
+}) {
+  const model = useLoader(GLTFLoader, "/models/" + file + ".glb");
+  const scene = useMemo(() => {
+    const root = distant ? model.scene.clone(true) : model.scene;
+    root.traverse((o) => {
+      if (!(o instanceof T.Mesh)) return;
+      if (distant) {
+        const source = o.material as T.MeshStandardMaterial;
+        o.material = new T.MeshLambertMaterial({
+          vertexColors: true,
+          side: source.side,
+          transparent: source.transparent,
+          opacity: source.opacity,
+        });
       }
+      o.castShadow = !distant && !o.material.transparent;
+      o.receiveShadow = !distant;
     });
-  }, [scene]);
+    return root;
+  }, [model, distant]);
+  useEffect(
+    () => () => {
+      if (distant)
+        scene.traverse((o) => {
+          if (o instanceof T.Mesh) o.material.dispose();
+        });
+    },
+    [scene, distant],
+  );
   return <primitive object={scene} position={[x, 0.12, z]} />;
 }
-function Signature({ site }: { site: (typeof heroSites)[number] }) {
-  const [x, z] = [site.x, site.z];
+function LandmarkAsset({
+  file,
+  x,
+  z,
+  high,
+}: {
+  file: string;
+  x: number;
+  z: number;
+  high: boolean;
+}) {
+  const [near, setNear] = useState(false);
+  useFrame(({ camera }) => {
+    const range = Math.hypot(camera.position.x - x, camera.position.z - z);
+    if (!near && range < 29) setNear(true);
+    else if (near && range > 37) setNear(false);
+  });
+  const fallback = <Asset file={file + "-far"} x={x} z={z} distant />;
   return (
     <Suspense fallback={null}>
-      <Asset file={site.file} x={x} z={z} />
+      {near || high ? (
+        <Suspense fallback={fallback}>
+          <Asset file={file} x={x} z={z} />
+        </Suspense>
+      ) : (
+        fallback
+      )}
     </Suspense>
   );
 }
@@ -57,7 +109,7 @@ const rand = (i: number) => {
 };
 function Hills() {
   const geo = useMemo(() => {
-    const g = new T.PlaneGeometry(800, 800, 144, 144);
+    const g = new T.PlaneGeometry(800, 800, 72, 72);
     g.rotateX(-Math.PI / 2);
     const p = g.attributes.position,
       c = [],
@@ -88,7 +140,7 @@ function Hills() {
   }, []);
   return (
     <mesh geometry={geo} receiveShadow>
-      <meshStandardMaterial vertexColors roughness={1} />
+      <meshLambertMaterial vertexColors />
     </mesh>
   );
 }
@@ -234,63 +286,128 @@ function Globe() {
 }
 const tau = 2 * Math.PI;
 function Sky() {
+  const sky = useLoader(T.TextureLoader, "/materials/sky.webp");
+  sky.colorSpace = T.SRGBColorSpace;
   return (
-    <mesh scale={390}>
-      <sphereGeometry args={[1, 48, 24]} />
-      <shaderMaterial
+    <mesh scale={390} renderOrder={-10}>
+      <sphereGeometry args={[1, 32, 16]} />
+      <meshBasicMaterial
+        map={sky}
         side={T.BackSide}
         depthWrite={false}
-        vertexShader={
-          "varying vec3 dir; void main(){dir=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}"
-        }
-        fragmentShader={`varying vec3 dir;
- float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
- float noise(vec2 p){vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+1.),f.x),f.y);}
- void main(){vec3 d=normalize(dir);float h=max(d.y,0.);vec3 s=mix(vec3(.74,.85,.87),vec3(.18,.48,.76),pow(h,.58));vec2 p=d.xz/max(.08,h)*2.;float n=noise(p)*.57+noise(p*2.1)*.28+noise(p*4.3)*.15;s=mix(s,vec3(.98,.97,.92),smoothstep(.53,.77,n)*smoothstep(.03,.23,h)*.9);gl_FragColor=vec4(s,1.);}`}
+        fog={false}
+        toneMapped={false}
       />
     </mesh>
   );
 }
+const pedestrianSkin = ["#895c43", "#f1c8a2", "#ba825e"];
+const pedestrianOutfit = ["#516987", "#b38b70", "#5d887a", "#c0af70"];
+function DistantWalker({ i }: { i: number }) {
+  const phase = useRef({ value: i });
+  const geometry = useMemo(() => {
+    const parts: T.BufferGeometry[] = [];
+    function oval(
+      x: number,
+      y: number,
+      z: number,
+      w: number,
+      h: number,
+      d: number,
+      tint: string,
+    ) {
+      const g = new T.SphereGeometry(1, 7, 5).scale(w, h, d).translate(x, y, z);
+      const colors = new Float32Array(g.attributes.position.count * 3),
+        color = new T.Color(tint);
+      for (let n = 0; n < colors.length; n += 3) color.toArray(colors, n);
+      g.setAttribute("color", new T.BufferAttribute(colors, 3));
+      parts.push(g);
+    }
+    const skin = pedestrianSkin[i % 3],
+      shirt = pedestrianOutfit[i % 4];
+    oval(0, 1.63, 0, 0.16, 0.2, 0.15, skin);
+    oval(0, 1.76, -0.015, 0.17, 0.12, 0.16, "#423731");
+    oval(0, 1.18, 0, 0.25, 0.34, 0.16, shirt);
+    for (const side of [-1, 1]) {
+      oval(side * 0.245, 1.18, 0, 0.08, 0.22, 0.08, shirt);
+      oval(side * 0.25, 0.96, 0.015, 0.06, 0.13, 0.06, skin);
+      oval(side * 0.115, 0.52, 0, 0.105, 0.42, 0.115, "#414f54");
+      oval(side * 0.115, 0.15, 0.055, 0.105, 0.085, 0.16, "#4c423b");
+    }
+    return mergeGeometries(parts);
+  }, [i]);
+  const material = useMemo(() => {
+    const m = new T.MeshLambertMaterial({ vertexColors: true });
+    m.onBeforeCompile = (shader) => {
+      shader.uniforms.stepPhase = phase.current;
+      shader.vertexShader =
+        "uniform float stepPhase;\n" +
+        shader.vertexShader.replace(
+          "#include <begin_vertex>",
+          "#include <begin_vertex>\ntransformed.z+=sin(stepPhase)*sign(position.x)*max(0.,.92-position.y)*.25;",
+        );
+    };
+    return m;
+  }, []);
+  useFrame((_, dt) => {
+    phase.current.value += dt * 3.6;
+  });
+  return <mesh geometry={geometry} material={material} />;
+}
 function Pedestrian({ i }: { i: number }) {
   const g = useRef<T.Group>(null),
     speed = useRef(1.65);
-  useFrame(({ clock }) => {
+  const [near, setNear] = useState(false);
+  useFrame(({ clock, camera }) => {
     if (!g.current) return;
     const t = clock.elapsedTime * 0.14 + i * 1.31;
     const x = ((i % 3) - 1) * 46 + Math.sin(t) * 6,
       z = (i < 3 ? -19 : 9) + Math.cos(t) * 1.7;
+    const range = Math.hypot(camera.position.x - x, camera.position.z - z);
+    if (!near && range < 10) setNear(true);
+    else if (near && range > 14) setNear(false);
     g.current.position.set(x, 0.25, z);
     g.current.rotation.y = Math.atan2(6 * Math.cos(t), -1.7 * Math.sin(t));
   });
   return (
     <group ref={g}>
-      <Avatar
-        data={{
-          ...initialAvatar,
-          preset: i % 2 ? "Female" : "Male",
-          skin: ["#895c43", "#f1c8a2", "#ba825e"][i % 3],
-          outfit: ["#516987", "#b38b70", "#5d887a", "#c0af70"][i % 4],
-          hair: ["Bob", "Curls", "Crop"][i % 3],
-        }}
-        speed={speed}
-      />
+      {near ? (
+        <Avatar
+          data={{
+            ...initialAvatar,
+            preset: i % 2 ? "Female" : "Male",
+            skin: pedestrianSkin[i % 3],
+            outfit: pedestrianOutfit[i % 4],
+            hair: ["Bob", "Curls", "Crop"][i % 3],
+          }}
+          speed={speed}
+        />
+      ) : (
+        <DistantWalker i={i} />
+      )}
     </group>
   );
 }
-export default function Landscape({ low = false }: { low?: boolean }) {
+export default function Landscape({
+  low = false,
+  high = false,
+}: {
+  low?: boolean;
+  high?: boolean;
+}) {
   return (
     <>
       <Sky />
       {!low && <Birds />}
-      <Reflection />
+      {high && <Reflection />}
       <Globe />
       <Hills />
       <Suspense fallback={null}>
-        <Asset file="plaza" x={0} z={14} />
+        <LandmarkAsset file="plaza" x={0} z={14} high={high} />
       </Suspense>
       <Scenery low={low} />
       {heroSites.map((site) => (
-        <Signature key={site.id} site={site} />
+        <LandmarkAsset key={site.id} {...site} high={high} />
       ))}
       {Array.from({ length: low ? 3 : 6 }, (_, i) => (
         <Pedestrian key={i} i={i} />

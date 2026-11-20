@@ -1,0 +1,22 @@
+[
+  {
+    "device": "desktop",
+    "fps": 6.32,
+    "callsPerFrame": 167,
+    "trianglesPerFrame": 142292,
+    "frames": 32,
+    "width": 560,
+    "height": 350,
+    "warmupDraws": 2660
+  },
+  {
+    "device": "touch emulation",
+    "fps": 8.74,
+    "callsPerFrame": 112,
+    "trianglesPerFrame": 117940,
+    "frames": 44,
+    "width": 280,
+    "height": 561,
+    "warmupDraws": 1853
+  }
+]
