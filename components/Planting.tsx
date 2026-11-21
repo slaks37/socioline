@@ -2,7 +2,7 @@
 import { useMemo, useEffect, useRef } from "react";
 import { useLoader, useFrame } from "@react-three/fiber";
 import * as T from "three";
-export type TreeData = { x: number; z: number; h: number };
+export type TreeData = { x: number; z: number; y?: number; h: number };
 export function Crowns({ trees }: { trees: TreeData[] }) {
   const wind = useRef({ value: 0 });
   useFrame((_, dt) => {
@@ -29,9 +29,9 @@ export function Crowns({ trees }: { trees: TreeData[] }) {
     };
     const mesh = new T.InstancedMesh(geo, mat, trees.length * 3),
       o = new T.Object3D();
-    trees.forEach(({ x, z, h }, i) => {
+    trees.forEach(({ x, z, h, y = 0 }, i) => {
       for (let j = 0; j < 3; j++) {
-        o.position.set(x, h * 0.77, z);
+        o.position.set(x, y + h * 0.77, z);
         o.scale.set(h * 1.03, h * 0.95, 1);
         o.rotation.set(0, i + (j * Math.PI) / 3, 0);
         o.updateMatrix();

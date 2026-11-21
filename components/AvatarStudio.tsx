@@ -14,6 +14,8 @@ import {
   ZoomOut,
 } from "lucide-react";
 import {
+  proportions,
+  type Proportion,
   accessoryLabels,
   collections,
   collectionLabels,
@@ -50,7 +52,7 @@ const skinColorNames = [
   "Persik",
   "Perunggu",
 ];
-const panels = ["Wajah", "Pakaian", "Detail"] as const;
+const panels = ["Wajah", "Bentuk", "Pakaian", "Detail"] as const;
 
 function Palette({
   title,
@@ -271,7 +273,52 @@ export default function AvatarStudio({
               </button>
             ))}
           </div>
-          {panel !== "Detail" ? (
+          {panel === "Bentuk" ? (
+            <div className={styles.sculpt}>
+              {(Object.keys(proportions) as Proportion[]).map((key) => {
+                const { label, min, max, base } = proportions[key];
+                const value = avatar.shape?.[key] ?? base;
+                return (
+                  <label key={key}>
+                    <span>
+                      {label}
+                      <output>
+                        {value}
+                        {key === "height" ? " cm" : "%"}
+                      </output>
+                    </span>
+                    <input
+                      type="range"
+                      min={min}
+                      max={max}
+                      value={value}
+                      aria-label={label}
+                      onChange={(event) =>
+                        previewChange(
+                          {
+                            ...avatar,
+                            shape: {
+                              ...avatar.shape,
+                              [key]: Number(event.target.value),
+                            },
+                          },
+                          key !== "height" && key !== "build",
+                        )
+                      }
+                    />
+                  </label>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() =>
+                  previewChange({ ...avatar, shape: undefined }, false)
+                }
+              >
+                Kembalikan proporsi awal
+              </button>
+            </div>
+          ) : panel !== "Detail" ? (
             <fieldset className={styles.choices} key={panel}>
               <legend className={styles.srOnly}>
                 {panel === "Wajah" ? "Pilihan wajah" : "Pilihan pakaian"}

@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useEffect } from "react";
 import * as T from "three";
-import { resolveLook, type AvatarData } from "./avatar-data";
+import { measure, resolveLook, type AvatarData } from "./avatar-data";
 import { faceGeometry, faceTexture } from "./avatar-face";
 import { hairGeometry } from "./avatar-hair";
 import HeadAccessory from "./HeadAccessory";
@@ -17,13 +17,28 @@ export default function AvatarHead({ data }: { data: AvatarData }) {
     accessory,
     outfitIndex,
   } = resolveLook(data);
+  const jaw = measure(data, "jaw"),
+    nose = measure(data, "nose"),
+    eyes = measure(data, "eyes"),
+    spacing = measure(data, "spacing"),
+    mouth = measure(data, "mouth");
   const sculpt = useMemo(
-    () => faceGeometry(female, faceIndex),
-    [female, faceIndex],
+    () => faceGeometry(female, faceIndex, jaw, nose),
+    [female, faceIndex, jaw, nose],
   );
   const paint = useMemo(
-    () => faceTexture(collection, female, faceIndex, skin, hairColor),
-    [collection, female, faceIndex, skin, hairColor],
+    () =>
+      faceTexture(
+        collection,
+        female,
+        faceIndex,
+        skin,
+        hairColor,
+        eyes,
+        spacing,
+        mouth,
+      ),
+    [collection, female, faceIndex, skin, hairColor, eyes, spacing, mouth],
   );
   const hood =
     accessory === "Headscarf" || accessory === "Headwrap" || hair === "Hijab";
@@ -38,7 +53,10 @@ export default function AvatarHead({ data }: { data: AvatarData }) {
   useEffect(() => () => paint.dispose(), [paint]);
   useEffect(() => () => coiffure?.dispose(), [coiffure]);
   return (
-    <group position={[0, 1.705, 0.009]}>
+    <group
+      position={[0, 1.705, 0.009]}
+      scale={[measure(data, "faceWidth"), 1, 1]}
+    >
       <mesh geometry={sculpt} scale={1.011}>
         <meshBasicMaterial color="#51323b" side={T.BackSide} />
       </mesh>

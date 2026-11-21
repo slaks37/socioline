@@ -458,3 +458,35 @@
     gap: 10px;
   }
 }
+
+.sculpt {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(178px, 100%), 1fr));
+  gap: 1.2rem 1.6rem;
+}
+.sculpt label {
+  display: grid;
+  gap: 0.45rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.sculpt span {
+  display: flex;
+  justify-content: space-between;
+}
+.sculpt output {
+  color: #65537c;
+  font-variant-numeric: tabular-nums;
+}
+.sculpt input {
+  width: 100%;
+  accent-color: #564177;
+}
+.sculpt button {
+  justify-self: start;
+  color: #51416b;
+  text-decoration: underline;
+  background: transparent;
+  border: 0;
+  padding: 0.55rem 0;
+}

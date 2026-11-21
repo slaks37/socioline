@@ -131,7 +131,7 @@ function Hills() {
         6 * Math.cos(z * 0.09 + x * 0.023) +
         3 * Math.sin(x * 0.13 - z * 0.08);
       const h = -0.58 + strength * (ridge + Math.max(0, r - 145) * 0.095);
-      p.setY(i, h);
+      p.setY(i, x < -77 && x > -161 && z > -85 && z < 72 ? -8 : h);
       color.setHSL(
         0.27 + 0.036 * Math.sin(z * 0.03),
         0.19 + 0.12 * rand(i),
@@ -214,6 +214,7 @@ function Scenery({ low }: { low: boolean }) {
     for (let i = 0; i < (low ? 170 : 390); i++) {
       const x = (rand(i + 5) - 0.5) * 260,
         z = (rand(i + 430) - 0.5) * 225;
+      if (x < -77 && z > -72 && z < 58) continue;
       if (Math.abs(x) > 76 || z < -69 || z > 49)
         tree(x, z, i, 4 + rand(i + 200) * 6);
     }
@@ -233,6 +234,7 @@ function Scenery({ low }: { low: boolean }) {
         r = 102 + rand(i + 102) * 43,
         x = Math.sin(a) * r,
         z = Math.cos(a) * r;
+      if (x < -77 && z > -75 && z < 61) continue;
       const h = 5 + rand(i + 88) ** 3 * 33,
         w = 3 + rand(i) * 6,
         d = 4 + rand(i + 22) * 6;
@@ -291,12 +293,22 @@ function Globe() {
 }
 const tau = 2 * Math.PI;
 function Sky() {
+  const mat = useRef<T.MeshBasicMaterial>(null);
+  useFrame(() => {
+    const dusk = (1 - Math.cos(((Date.now() / 1000) * Math.PI) / 180)) * 0.5;
+    mat.current?.color.setRGB(
+      1 - dusk * 0.73,
+      1 - dusk * 0.68,
+      1 - dusk * 0.52,
+    );
+  });
   const sky = useLoader(T.TextureLoader, "/materials/sky.webp");
   sky.colorSpace = T.SRGBColorSpace;
   return (
     <mesh scale={390} renderOrder={-10}>
       <sphereGeometry args={[1, 32, 16]} />
       <meshBasicMaterial
+        ref={mat}
         map={sky}
         side={T.BackSide}
         depthWrite={false}

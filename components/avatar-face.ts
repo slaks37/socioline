@@ -44,7 +44,12 @@ const profile = new T.CubicInterpolant(
 );
 const bell = (x: number) => Math.exp(-x * x);
 
-export function faceGeometry(female: boolean, index: number) {
+export function faceGeometry(
+  female: boolean,
+  index: number,
+  jawScale = 1,
+  noseScale = 1,
+) {
   const columns = 72,
     rows = 50;
   const positions: number[] = [],
@@ -54,6 +59,8 @@ export function faceGeometry(female: boolean, index: number) {
     const v = row / rows;
     const [rx, rz, offset] = profile.evaluate(v);
     const jaw =
+      jawScale -
+      1 +
       (female ? -0.045 : 0.035) +
       [0, -0.025, 0.025, -0.01, 0.055, -0.035, 0.03][index % 7];
     for (let col = 0; col <= columns; col++) {
@@ -73,7 +80,7 @@ export function faceGeometry(female: boolean, index: number) {
       positions.push(
         s * rx * (1 + jaw * bell((v - 0.79) / 0.16)),
         (0.51 - v) * (female ? 0.407 : 0.419),
-        offset + rz * c + mask + bridge + nose + cheek + muzzle,
+        offset + rz * c + mask + (bridge + nose) * noseScale + cheek + muzzle,
       );
       uvs.push(u, 1 - v);
       if (row && col) {
@@ -106,6 +113,9 @@ export function faceTexture(
   index: number,
   skin: string,
   hairColor: string,
+  eyes = 1,
+  spacing = 1,
+  mouthScale = 1,
 ) {
   const expression =
     (expressions[collection] ?? expressions.indonesia)[female ? 1 : 0][index] ??
@@ -175,9 +185,9 @@ export function faceTexture(
         ellipse(22 + i * 5.5, 123 + 2 * Math.sin(i * 4), 0.8, 0.64, "#af7659");
     }
     const eyeY = female ? 103 : 104;
-    ctx.translate((female ? 44 : 42) + ((index % 3) - 1) * 1.5, eyeY);
+    ctx.translate((female ? 44 : 42) * spacing + ((index % 3) - 1) * 1.5, eyeY);
     ctx.rotate((female ? -0.085 : -0.035) + ((index % 3) - 1) * 0.03);
-    ctx.scale(female ? 1 : 0.97, female ? 1 : 0.77);
+    ctx.scale(eyes * (female ? 1 : 0.97), eyes * (female ? 1 : 0.77));
     const shut =
       expression === "laugh" || (expression === "wink" && sign === 1);
     if (shut) {
@@ -231,7 +241,7 @@ export function faceTexture(
   stroke("M2.2 129.1 Q3.6 128.4 3.8 127.7", "#bf8271", 0.75);
   ellipse(-1.1, 124.2, 1.6, 1.15, "rgba(255,226,204,.8)");
   ctx.translate(0, 151);
-  ctx.scale(1.18, 1);
+  ctx.scale(1.18 * mouthScale, 1);
   const open = ["bright", "laugh", "wink"].includes(expression);
   if (open) {
     const mouth =

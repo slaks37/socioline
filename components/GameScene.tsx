@@ -1,22 +1,38 @@
 "use client";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useMemo } from "react";
 import * as T from "three";
 import Landscape from "./Landscape";
-import { traversable, ground } from "../lib/navigation";
+import { ground } from "../lib/navigation";
+import { useLoader } from "@react-three/fiber";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { heroSites } from "./Landscape";
+import { makePhysics, readyPhysics, liftAt, liftSite } from "./city-physics";
+import { CityEnvironment, spawnFloor } from "./RiverValley";
+import { riverX, waterLevel } from "../lib/river-valley";
+import CityNeighbor from "./CityNeighbors";
+import type { Neighbor } from "./useCitySession";
+import { Neighborhood } from "./Neighborhood";
 import Signs from "./Signs";
 import Avatar from "./Avatar";
 import { City, Lighting } from "./City";
-import type { AvatarData } from "./avatar-data";
+import { measure, type AvatarData } from "./avatar-data";
 import { landmarks, interactives } from "../lib/content";
 export type Input = {
   dx: number;
   dz: number;
   jump: boolean;
+  hold?: boolean;
   turn: number;
   tilt: number;
 };
-export type Location = { x: number; z: number; id: string };
+export type Location = {
+  x: number;
+  z: number;
+  id: string;
+  mode?: string;
+  y?: number;
+};
 export type Pose = { x: number; y: number; z: number; facing: number };
 export type GameProps = {
   pose: React.RefObject<Pose>;
@@ -30,6 +46,10 @@ export type GameProps = {
   panorama: boolean;
   distance: number;
   onFail: () => void;
+  peers: Neighbor[];
+  deliveries: number;
+  decor: number;
+  weather: "auto" | "sun" | "rain";
 };
 function Player({
   pose,
@@ -51,6 +71,41 @@ function Player({
     reported = useRef<Location | null>(null),
     snap = useRef(true);
   const { gl, camera } = useThree();
+  const sites = useMemo(
+    () => [...heroSites, { x: 0, z: 14, file: "plaza" }],
+    [],
+  );
+  const models = useLoader(
+    GLTFLoader,
+    sites.map((s) => "/models/" + s.file + "-far.glb"),
+  );
+  const physics = useRef<ReturnType<typeof makePhysics> | null>(null);
+  const locomotion = useRef("");
+  const feetGrounded = useRef(false);
+  const heightScale = measure(avatar, "height"),
+    build = measure(avatar, "build");
+  useEffect(() => {
+    let active = true;
+    readyPhysics()
+      .then(() => {
+        if (active)
+          physics.current = makePhysics(
+            sites.map((s, i) => ({ ...s, scene: models[i].scene })),
+            heightScale,
+            build,
+          );
+      })
+      .catch(() => {
+        if (active) onFail();
+      });
+    return () => {
+      active = false;
+      physics.current?.dispose();
+      physics.current = null;
+    };
+  }, [models, sites, heightScale, build, onFail]);
+  const rayOrigin = useMemo(() => new T.Vector3(), []),
+    rayDirection = useMemo(() => new T.Vector3(), []);
   useEffect(() => {
     const canvas = gl.domElement;
     canvas.addEventListener("webglcontextlost", onFail);
@@ -71,7 +126,18 @@ function Player({
     if (root.current) {
       root.current.position.set(
         travel.x,
-        travel.resume?.y ?? ground(travel.x, travel.z, inside, 0),
+        travel.resume?.y ??
+          (travel.x < -82
+            ? spawnFloor(travel.x, travel.z) + 0.05
+            : ground(
+                travel.x,
+                travel.z,
+                travel.x < -34 &&
+                  travel.x > -58 &&
+                  travel.z < -26 &&
+                  travel.z > -46,
+                0,
+              )),
         travel.z,
       );
       if (!travel.resume) input.current.turn = 0;
@@ -79,7 +145,7 @@ function Player({
       vy.current = 0;
       snap.current = true;
     }
-  }, [travel, inside, input]);
+  }, [travel, input]);
   useEffect(() => {
     const pressed = keys.current;
     pressed.clear();
@@ -87,6 +153,7 @@ function Player({
       input.current.dx = 0;
       input.current.dz = 0;
       input.current.jump = false;
+      input.current.hold = false;
       speed.current = 0;
       return;
     }
@@ -159,7 +226,7 @@ function Player({
       el.removeEventListener("lostpointercapture", end);
     };
   }, [paused, gl, input]);
-  useFrame((_, delta) => {
+  useFrame(({ clock }, delta) => {
     const g = root.current;
     if (!g) return;
     const p = g.position,
@@ -181,48 +248,103 @@ function Player({
     const mag = Math.hypot(dx, dz);
     speed.current =
       mag > 0.08 ? (k.has("ShiftLeft") || k.has("ShiftRight") ? 10 : 5) : 0;
-    if (speed.current) {
-      dx /= mag;
-      dz /= mag;
-      const mx = dx * Math.cos(c.turn) + dz * Math.sin(c.turn),
-        mz = dz * Math.cos(c.turn) - dx * Math.sin(c.turn);
-      const free = (x: number, z: number) => traversable(x, z, inside);
-      const nx = p.x + mx * dt * speed.current,
-        nz = p.z + mz * dt * speed.current;
-      if (free(nx, p.z)) p.x = nx;
-      if (free(p.x, nz)) p.z = nz;
-      const turn = Math.atan2(mx, mz) - g.rotation.y;
-      g.rotation.y +=
-        Math.atan2(Math.sin(turn), Math.cos(turn)) * (1 - Math.exp(-13 * dt));
-    }
-    const floor = ground(p.x, p.z, inside, p.y);
-    if (!paused) {
-      if (c.jump && p.y <= floor + 0.08) vy.current = 6;
+    if (!physics.current) return;
+    const swimming =
+      p.x < -82 &&
+      Math.abs(p.x - riverX(p.z)) < 5.2 &&
+      p.y < waterLevel(p.z) + 0.08;
+    const ladder = landmarks.find(
+      (l) =>
+        l.kind < 7 &&
+        l.kind !== 5 &&
+        Math.abs(p.x - (l.x + (l.zone === "hub" ? 3.5 : 4.2) + 0.9)) < 0.94 &&
+        Math.abs(p.z - l.z) < 0.72,
+    );
+    const climb = !!ladder && (c.jump || c.hold || k.has("Space")) && !paused;
+    const elevator =
+      Math.abs(p.x - liftSite.x) < 0.93 && Math.abs(p.z - liftSite.z) < 0.69;
+    const mode = climb
+      ? "Memanjat"
+      : swimming
+        ? "Berenang"
+        : elevator
+          ? "Lift"
+          : !feetGrounded.current
+            ? "Di udara"
+            : speed.current > 5
+              ? "Berlari"
+              : "Berjalan";
+    locomotion.current = mode;
+    if (!paused && !panorama) {
+      let vx = 0,
+        vz = 0;
+      if (speed.current) {
+        dx /= mag;
+        dz /= mag;
+        vx =
+          (dx * Math.cos(c.turn) + dz * Math.sin(c.turn)) *
+          speed.current *
+          (swimming ? 0.56 : 1);
+        vz =
+          (dz * Math.cos(c.turn) - dx * Math.sin(c.turn)) *
+          speed.current *
+          (swimming ? 0.56 : 1);
+        const turn = Math.atan2(vx, vz) - g.rotation.y;
+        g.rotation.y +=
+          Math.atan2(Math.sin(turn), Math.cos(turn)) * (1 - Math.exp(-13 * dt));
+      }
+      if (c.jump && feetGrounded.current && !climb) vy.current = 6;
+      const jumps = c.jump;
       c.jump = false;
-      vy.current -= 17 * dt;
-      p.y = Math.max(floor, p.y + vy.current * dt);
-      if (p.y <= floor) vy.current = 0;
-    }
-    const baseY = reduced.current ? floor : p.y;
-    let arm = inside ? Math.min(distance, 3.6) : distance;
-    for (let t = 0.6; t < arm; t += 0.45) {
-      if (
-        p.z < 40 &&
-        !traversable(
-          p.x + Math.sin(c.turn) * t,
-          p.z + Math.cos(c.turn) * t,
-          inside,
-        )
-      ) {
-        arm = Math.max(0.5, t - 0.45);
-        break;
+      const steps = Math.max(1, Math.ceil(dt / (1 / 45))),
+        step = dt / steps;
+      for (let i = 0; i < steps; i++) {
+        const time = Date.now() / 1000 - dt + step * (i + 1);
+        vy.current = climb
+          ? 2.8
+          : swimming
+            ? (waterLevel(p.z) - 0.91 - p.y) * 4 + (jumps ? 2 : 0)
+            : Math.max(-28, vy.current - 17 * step);
+        const liftY = liftAt(time);
+        if (elevator && Math.abs(p.y - liftY) < 0.3 && vy.current <= 0) {
+          p.y = liftY + 0.025;
+          vy.current = -0.45;
+        }
+        feetGrounded.current = physics.current.move(
+          p,
+          vx * step,
+          vy.current * step,
+          vz * step,
+          time,
+        );
+        if (feetGrounded.current && vy.current < 0) vy.current = 0;
+        if (
+          climb &&
+          ladder &&
+          p.y > 3.6 + (landmarks.indexOf(ladder) % 3) * 0.22
+        ) {
+          physics.current.move(p, -1.1, -0.035, 0, time);
+          break;
+        }
       }
     }
+    const baseY = p.y;
+    const arm = inside ? Math.min(distance, 3.6) : distance;
+    rayOrigin.set(p.x, baseY + 1.45 * heightScale, p.z);
     target.current.set(
       p.x + Math.sin(c.turn) * arm,
       baseY + Math.min(c.tilt, inside ? 2.55 : 3.4),
       p.z + Math.cos(c.turn) * arm,
     );
+    rayDirection.copy(target.current).sub(rayOrigin);
+    const len = rayDirection.length();
+    rayDirection.normalize();
+    target.current
+      .copy(rayOrigin)
+      .addScaledVector(
+        rayDirection,
+        physics.current.camera(rayOrigin, rayDirection, len),
+      );
     if (panorama) {
       if (inside) {
         target.current.set(-41, 2.35, -28.8);
@@ -282,8 +404,15 @@ function Player({
         }
       }
       const last = reported.current;
-      if (!last || last.x !== p.x || last.z !== p.z || last.id !== closest) {
-        const next = { x: p.x, z: p.z, id: closest };
+      if (
+        !last ||
+        last.x !== p.x ||
+        last.z !== p.z ||
+        last.id !== closest ||
+        last.mode !== mode ||
+        Math.abs((last.y ?? 0) - p.y) > 0.1
+      ) {
+        const next = { x: p.x, y: p.y, z: p.z, id: closest, mode };
         reported.current = next;
         report(next);
       }
@@ -300,7 +429,13 @@ function Player({
           depthWrite={false}
         />
       </mesh>
-      <Avatar data={avatar} speed={speed} reading={paused} vertical={vy} />
+      <Avatar
+        data={avatar}
+        speed={speed}
+        reading={paused}
+        vertical={vy}
+        locomotion={locomotion}
+      />
     </group>
   );
 }
@@ -340,18 +475,24 @@ function Adaptive({ onChange }: { onChange: (value: number) => void }) {
   });
   return null;
 }
-function StudioCamera({ portrait }: { portrait: boolean }) {
+function StudioCamera({
+  portrait,
+  heightScale,
+}: {
+  portrait: boolean;
+  heightScale: number;
+}) {
   const { camera, size } = useThree();
   useEffect(() => {
-    const targetY = portrait ? 1.61 : 1.0;
-    const height = portrait ? 0.91 : 2.24;
+    const targetY = (portrait ? 1.61 : 1.0) * heightScale;
+    const height = (portrait ? 0.91 : 2.24) * Math.max(1, heightScale);
     const width = portrait ? 0.72 : 0.9;
     const aperture = Math.tan(T.MathUtils.degToRad(16));
     const distance =
       Math.max(height, (width * size.height) / size.width) / (2 * aperture);
     camera.position.set(0, targetY + 0.04, distance);
     camera.lookAt(0, targetY, 0);
-  }, [camera, size, portrait]);
+  }, [camera, size, portrait, heightScale]);
   return null;
 }
 export function Preview({
@@ -365,7 +506,10 @@ export function Preview({
 }) {
   return (
     <Canvas camera={{ position: [0, 1.65, 2], fov: 32 }} dpr={[1, 1.6]}>
-      <StudioCamera portrait={portrait} />
+      <StudioCamera
+        portrait={portrait}
+        heightScale={measure(avatar, "height")}
+      />
       <hemisphereLight args={["#fff5e7", "#c3d4dc", 1.45]} />
       <directionalLight position={[-3, 4, 5]} intensity={1.8} color="#fff0df" />
       <directionalLight
@@ -426,12 +570,17 @@ export default function GameScene(props: GameProps) {
         args={["#b5cfd9", 78, props.quality === "Low" ? 185 : 335]}
       />
       <ShadowRefresh quality={props.quality} travel={props.travel.seq} />
-      <Lighting />
+      <Lighting dynamicSun />
+      <CityEnvironment weather={props.weather} />
       <Landscape
         low={props.quality === "Low"}
         high={props.quality === "High"}
       />
       <City />
+      <Neighborhood pose={props.pose} decor={props.decor} />
+      {props.peers.map((peer) => (
+        <CityNeighbor key={peer.id} peer={peer} />
+      ))}
       <Signs />
       {props.quality === "Balanced" && <Adaptive onChange={setBalancedDpr} />}
       {l && (

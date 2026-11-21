@@ -4,7 +4,7 @@ import { useMemo, useRef, type RefObject } from "react";
 import * as T from "three";
 import { useFrame } from "@react-three/fiber";
 import AvatarHead from "./AvatarHead";
-import { resolveLook, type AvatarData } from "./avatar-data";
+import { measure, resolveLook, type AvatarData } from "./avatar-data";
 import { getGarment } from "./avatar-wardrobe";
 import {
   Carry,
@@ -21,11 +21,13 @@ export default function Avatar({
   speed,
   reading = false,
   vertical,
+  locomotion,
 }: {
   data: AvatarData;
   speed?: RefObject<number>;
   reading?: boolean;
   vertical?: RefObject<number>;
+  locomotion?: RefObject<string>;
 }) {
   const { collection, female, outfitIndex, skin } = resolveLook(data);
   const garment = getGarment(collection, female, outfitIndex);
@@ -57,6 +59,9 @@ export default function Avatar({
       stride = Math.min(motion / 4.5, 1),
       running = motion > 5;
     phase.current += dt * (motion > 0.08 ? (running ? 12.8 : 9.4) : 1.7);
+    const climbing = locomotion?.current === "Memanjat",
+      swimming = locomotion?.current === "Berenang";
+    if (climbing || swimming) phase.current += dt * 4;
     const phaseAngle = phase.current,
       swing = Math.sin(phaseAngle) * stride * (skirted ? 0.42 : 0.65);
     const bounce = (1 - Math.cos(phaseAngle * 2)) * 0.011 * stride;
@@ -65,7 +70,7 @@ export default function Avatar({
         bounce + Math.sin(phaseAngle) * 0.004 * (1 - stride);
       upperBody.current.rotation.z = 0.025 * stride * Math.sin(phaseAngle);
       upperBody.current.rotation.y = 0.062 * stride * Math.cos(phaseAngle);
-      upperBody.current.rotation.x = running ? 0.035 : 0.005;
+      upperBody.current.rotation.x = swimming ? 0.22 : running ? 0.035 : 0.005;
     }
     if (hips.current) hips.current.position.y = bounce;
     for (let i = 0; i < 2; i++) {
@@ -74,14 +79,21 @@ export default function Avatar({
         knee = knees.current[i],
         arm = arms.current[i];
       const angle = swing * direction;
-      if (leg) leg.rotation.x = angle;
+      if (leg)
+        leg.rotation.x = climbing
+          ? -0.35 + 0.42 * Math.sin(phaseAngle + i * Math.PI)
+          : angle;
       if (knee) knee.rotation.x = Math.max(0, -angle) * (running ? 1.18 : 0.87);
       if (arm) {
-        const aim = reading
-          ? -0.66 + Math.sin(phaseAngle * 0.65 + i) * 0.07
-          : -angle * 0.92 +
-            Math.sin(phaseAngle + i) * 0.025 -
-            (Math.abs(vertical?.current ?? 0) > 0.6 ? 0.26 : 0);
+        const aim = climbing
+          ? -2.1 + 0.55 * Math.sin(phaseAngle + i * Math.PI)
+          : swimming
+            ? -1.0 + Math.sin(phaseAngle + i * Math.PI) * 0.84
+            : reading
+              ? -0.66 + Math.sin(phaseAngle * 0.65 + i) * 0.07
+              : -angle * 0.92 +
+                Math.sin(phaseAngle + i) * 0.025 -
+                (Math.abs(vertical?.current ?? 0) > 0.6 ? 0.26 : 0);
         arm.rotation.x = T.MathUtils.damp(arm.rotation.x, aim, 12, dt);
       }
     }
@@ -109,7 +121,13 @@ export default function Avatar({
     }
   });
   return (
-    <group>
+    <group
+      scale={[
+        measure(data, "build"),
+        measure(data, "height"),
+        Math.sqrt(measure(data, "build")),
+      ]}
+    >
       <group ref={hips}>
         <ClothMesh geometry={pieces.hips} color={garment.pants} />
         {([-1, 1] as const).map((side, i) => (

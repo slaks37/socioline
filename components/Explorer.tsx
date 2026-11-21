@@ -1,4 +1,5 @@
 "use client";
+import { useCitySession } from "./useCitySession";
 import Ambience from "./Ambience";
 import AvatarStudio from "./AvatarStudio";
 import CityReader, { ReadingLink, type Reading } from "./CityReader";
@@ -13,6 +14,15 @@ import {
   type ReactNode,
 } from "react";
 import { MapPin, Pause, Navigation } from "lucide-react";
+import {
+  activitySites,
+  actions,
+  act,
+  freshLife,
+  validLife,
+  type Activity,
+  type Life,
+} from "../engine/city-life";
 import { initialAvatar, validAvatar } from "./avatar-data";
 import type { Input, Location, Pose } from "./GameScene";
 import { interactives, districts, findPage } from "../lib/content";
@@ -37,6 +47,15 @@ class Guard extends Component<
 }
 const travelPoints = [
   { name: "Central Plaza", x: 0, z: 43 },
+  ...activitySites.map((s) => ({
+    name: s.name,
+    x: s.x,
+    z: s.z + (s.id === "friend" ? 2 : 1.1),
+  })),
+  { name: "Tepian sungai", x: -90, z: 10 },
+  { name: "Air terjun", x: -91, z: -40 },
+  { name: "Tangga panjat studio", x: -17.55, z: 24 },
+  { name: "Lift pustaka", x: -35, z: 19.1 },
   ...districts.map((d) => ({ name: d.name, x: d.x, z: -18 })),
 ];
 const key = "socioline.avatar.v1";
@@ -129,6 +148,8 @@ export default function Explorer() {
   const [reader, setReader] = useState<Reading | null>(null);
   const [editing, setEditing] = useState(false);
   const pose = useRef<Pose>({ x: 0, y: 0, z: 43, facing: Math.PI });
+  const network = useCitySession(pose);
+  const offlineLife = useRef(freshLife);
   const closePanel = useCallback(() => {
     open("");
     setReader(null);
@@ -147,8 +168,17 @@ export default function Explorer() {
     }>({ ...travelPoints[0], seq: 0 }),
     [loc, setLoc] = useState<Location>({ x: 0, z: 25, id: "" });
   const input = useRef<Input>({ dx: 0, dz: 0, jump: false, turn: 0, tilt: 4 });
-  const [inside, setInside] = useState(false),
-    [panorama, setPanorama] = useState(false),
+  const [weather, setWeather] = useState<"auto" | "sun" | "rain">("auto");
+  const [life, setLife] = useState<Life>(freshLife),
+    [activityNote, setActivityNote] = useState("");
+  const activity = activitySites.find(
+    (s) => Math.hypot(loc.x - s.x, loc.z - s.z) < 2.55 && (loc.y ?? 0) < 1.4,
+  );
+  const currentActivity = activitySites.find(
+    (s) => "activity-" + s.id === modal,
+  );
+  const inside = ((loc.x + 46) / 12.5) ** 2 + ((loc.z + 36) / 10.1) ** 2 < 1;
+  const [panorama, setPanorama] = useState(false),
     [distance, setDistance] = useState(7),
     [sound, setSound] = useState(false),
     [visited, setVisited] = useState<string[]>([]);
@@ -162,7 +192,6 @@ export default function Explorer() {
             name: "Grand Library",
             seq: t.seq + 1,
           }));
-          setInside(false);
         } else {
           returnPoint.current = { x: loc.x, z: loc.z };
           setTravel((t) => ({
@@ -171,11 +200,16 @@ export default function Explorer() {
             z: -27.3,
             seq: t.seq + 1,
           }));
-          setInside(true);
         }
         setPanorama(false);
         return;
       }
+      setLoc((last) => ({
+        ...last,
+        x: pose.current.x,
+        y: pose.current.y,
+        z: pose.current.z,
+      }));
       if (id) setVisited((v) => (v.includes(id) ? v : [...v, id]));
       open(id);
     },
@@ -192,6 +226,15 @@ export default function Explorer() {
       ?.setAttribute("open", "");
   }, []);
   useEffect(() => {
+    try {
+      const progress = JSON.parse(
+        localStorage.getItem("socioline.city.life.v1") ?? "null",
+      );
+      if (validLife(progress)) {
+        setLife(progress);
+        offlineLife.current = progress;
+      }
+    } catch {}
     try {
       const value = JSON.parse(localStorage.getItem(key) ?? "null");
       if (validAvatar(value)) {
@@ -218,11 +261,16 @@ export default function Explorer() {
         open("pause");
       }
       if (e.code === "KeyM") open("travel");
-      if (e.code === "KeyE" && loc.id) launch(loc.id);
+      if (e.code === "KeyE") {
+        if (activity) {
+          setActivityNote("");
+          open("activity-" + activity.id);
+        } else if (loc.id) launch(loc.id);
+      }
     };
     window.addEventListener("keydown", k);
     return () => window.removeEventListener("keydown", k);
-  }, [playing, loc.id, modal, launch]);
+  }, [playing, loc.id, modal, launch, activity]);
   const save = () => {
     window.scrollTo(0, 0);
     try {
@@ -240,6 +288,7 @@ export default function Explorer() {
       return;
     }
     if (editing) {
+      if (network.online) void network.join(avatar);
       const resume = { ...pose.current };
       setTravel((t) => ({
         name: t.name,
@@ -263,7 +312,7 @@ export default function Explorer() {
           name: target.name,
         }
       : travelPoints[0];
-    setInside(false);
+
     setPanorama(false);
     setTravel({ ...dest, seq: travel.seq + 1 });
     play(true);
@@ -284,9 +333,11 @@ export default function Explorer() {
       ].includes(selected.url));
   const zone = inside
     ? "Grand Library"
-    : loc.z > 1
-      ? "Central Hub"
-      : districts[loc.x < -23 ? 0 : loc.x > 23 ? 2 : 1].name;
+    : loc.x < -82
+      ? "Lembah Sungai"
+      : loc.z > 1
+        ? "Central Hub"
+        : districts[loc.x < -23 ? 0 : loc.x > 23 ? 2 : 1].name;
   const stick = (e: React.PointerEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     input.current.dx = Math.max(
@@ -373,6 +424,10 @@ export default function Explorer() {
                 inside,
                 panorama,
                 distance,
+                weather,
+                decor: life.decor,
+                peers: network.peers,
+                deliveries: network.deliveries,
               }}
               paused={!!modal}
               report={setLoc}
@@ -391,6 +446,9 @@ export default function Explorer() {
             <b>
               <MapPin size={15} />
               {zone}
+              {loc.mode && ["Memanjat", "Berenang", "Lift"].includes(loc.mode)
+                ? " · " + loc.mode
+                : ""}
             </b>
             <button
               aria-label="Peta dan perjalanan"
@@ -404,12 +462,16 @@ export default function Explorer() {
             >
               {panorama ? "Kembali bermain" : "Panorama"}
             </button>
+            <button aria-label="Pemain kota" onClick={() => open("social")}>
+              Bersama{network.online ? " · " + (network.peers.length + 1) : ""}
+            </button>
             <button aria-label="Pause city" onClick={() => open("pause")}>
               <Pause size={16} />
             </button>
           </div>
           <div
             className="mini"
+            title={"Ketinggian " + (loc.y ?? 0).toFixed(1) + " m"}
             role="img"
             aria-label={
               "Minimap. Current position " +
@@ -421,16 +483,27 @@ export default function Explorer() {
             <img alt="" src="/minimap.svg" />
             <i
               style={{
-                left: ((loc.x + 80) / 160) * 100 + "%",
-                top: ((loc.z + 72) / 120) * 100 + "%",
+                left: ((loc.x + 150) / 232) * 100 + "%",
+                top: ((loc.z + 72) / 130) * 100 + "%",
               }}
             />
           </div>
           <div className="controls">
-            WASD gerak · Seret kamera · Shift lari · Spasi lompat · E interaksi
-            · M peta · Esc jeda
+            WASD gerak · Seret kamera · Shift lari · Spasi lompat / tahan di
+            tangga panjat · E interaksi · M peta · Esc jeda
           </div>
-          {near && (
+          {activity && (
+            <button
+              className="interact"
+              onClick={() => {
+                setActivityNote("");
+                open("activity-" + activity.id);
+              }}
+            >
+              {activity.item}
+            </button>
+          )}
+          {near && !activity && (
             <button className="interact" onClick={() => launch(near.id)}>
               {near.id === "word-library"
                 ? inside
@@ -458,23 +531,124 @@ export default function Explorer() {
           </div>
           <button
             className="jump"
+            onPointerDown={(e) => {
+              input.current.hold = true;
+              e.currentTarget.setPointerCapture(e.pointerId);
+            }}
+            onLostPointerCapture={() => {
+              input.current.hold = false;
+            }}
             onClick={() => {
               input.current.jump = true;
             }}
           >
-            Jump
+            Lompat
           </button>
           {modal && (
             <Modal
               close={closePanel}
               reading={!!reader}
               title={
+                (modal === "social" ? "Kota bersama" : undefined) ??
+                currentActivity?.name ??
                 reader?.title ??
                 selected?.name ??
                 (modal === "pause" ? "Pengaturan kota" : "Peta dan perjalanan")
               }
             >
-              {reader ? (
+              {modal === "social" ? (
+                <>
+                  <p>
+                    {network.online
+                      ? network.peers.length +
+                        " pemain lain di sekitarmu. Penanda hijau menunjukkan pemain yang terhubung."
+                      : "Masuk sebagai tamu untuk bertemu pemain lain. Kota menyimpan aktivitas dan posisi tamu di server. Gunakan browser yang sama untuk kembali."}
+                  </p>
+                  <p role="status">{network.status}</p>
+                  {network.online ? (
+                    <button
+                      className="secondary"
+                      onClick={() => {
+                        network.leave();
+                        setLife(offlineLife.current);
+                      }}
+                    >
+                      Kembali bermain sendiri
+                    </button>
+                  ) : (
+                    <button
+                      className="button dark"
+                      disabled={network.busy}
+                      onClick={async () => {
+                        const session = await network.join(avatar);
+                        if (!session) return;
+                        setLife(session.life);
+                        if (session.pose)
+                          setTravel((t) => ({
+                            name: "Posisi terakhir",
+                            x: session.pose!.x,
+                            z: session.pose!.z,
+                            resume: session.pose!,
+                            seq: t.seq + 1,
+                          }));
+                        closePanel();
+                      }}
+                    >
+                      {network.busy ? "Menghubungkan…" : "Gabung kota bersama"}
+                    </button>
+                  )}
+                </>
+              ) : currentActivity ? (
+                <>
+                  <p>
+                    Energi {life.energy}/5 · {life.coins} koin · {life.supplies}{" "}
+                    bahan · {life.stock} produk
+                  </p>
+                  {network.online && currentActivity.id === "market" && (
+                    <p>
+                      Pesanan yang sudah diantar bersama: {network.deliveries}
+                    </p>
+                  )}
+                  {life.parcel && (
+                    <p>Pesanan bengkel siap diantar ke Gerai koperasi.</p>
+                  )}
+                  {currentActivity.id === "friend" && (
+                    <p>Kedekatan dengan Rani {life.friendship}/5</p>
+                  )}
+                  <div className="related">
+                    {(Object.keys(actions) as Activity[])
+                      .filter((key) => actions[key].site === currentActivity.id)
+                      .map((key) => (
+                        <button
+                          key={key}
+                          onClick={async () => {
+                            const next = network.online
+                              ? await network.perform(key)
+                              : act(life, key);
+                            if (!next) {
+                              setActivityNote("Aktivitas belum terkonfirmasi.");
+                              return;
+                            }
+                            setLife(next.state);
+                            setActivityNote(next.message);
+                            if (!network.online) {
+                              offlineLife.current = next.state;
+                              try {
+                                localStorage.setItem(
+                                  "socioline.city.life.v1",
+                                  JSON.stringify(next.state),
+                                );
+                              } catch {}
+                            }
+                          }}
+                        >
+                          {actions[key].label}
+                        </button>
+                      ))}
+                  </div>
+                  <p role="status">{activityNote}</p>
+                </>
+              ) : reader ? (
                 <CityReader page={reader} resume={closePanel} />
               ) : selected ? (
                 <>
@@ -545,19 +719,21 @@ export default function Explorer() {
                 </>
               ) : modal === "travel" ? (
                 <>
-                  <p>{visited.length} tempat dipelajari dalam sesi ini.</p>
+                  <p>
+                    {zone} · Ketinggian {(loc.y ?? 0).toFixed(1)} m ·{" "}
+                    {visited.length} tempat dipelajari dalam sesi ini.
+                  </p>
                   <img
                     width="100%"
                     height="145"
                     src="/minimap.svg"
-                    alt="Peta kota. Dari barat ke timur: The Word, The World, dan The Work. Central Hub berada di selatan."
+                    alt="Peta kota dan lembah sungai di barat. Dari barat ke timur: The Word, The World, dan The Work. Central Hub berada di selatan."
                   />
                   <div className="related">
                     {travelPoints.map((t) => (
                       <button
                         key={t.name}
                         onClick={() => {
-                          setInside(false);
                           setPanorama(false);
                           setTravel({ ...t, seq: travel.seq + 1 });
                           open("");
@@ -588,6 +764,19 @@ export default function Explorer() {
                   >
                     Suara kota {sound ? "aktif" : "nonaktif"}
                   </button>
+                  <label>
+                    Cuaca
+                    <select
+                      value={weather}
+                      onChange={(e) =>
+                        setWeather(e.target.value as typeof weather)
+                      }
+                    >
+                      <option value="auto">Siklus kota</option>
+                      <option value="sun">Cerah</option>
+                      <option value="rain">Hujan</option>
+                    </select>
+                  </label>
                   <label>
                     Kualitas grafis
                     <select

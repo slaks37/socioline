@@ -27,4 +27,12 @@ Untuk pengembangan jalankan `npm run local`. PostgreSQL lokal dibuat di `.world-
 - [Tangkapan runtime, termasuk interior dan dunia buatan](docs/qa-v3/)
 - [Masterplan kota dan sumber identitas SocioLine](docs/socioline-reference/)
 
-Lingkungan yang diuji adalah satu server lokal. Central City merupakan pengalaman pemain tunggal. Ruang multipemain menggunakan dunia privat hasil generator. Performa 3D pada perangkat fisik masih perlu diukur.
+Lab Dunia menyediakan ruang privat hasil generator. Central City memiliki mode sendiri dan mode kota bersama. Performa 3D pada perangkat fisik masih perlu diukur.
+
+### Kontrol kota dan bermain bersama
+
+Di Studio Avatar, tab **Bentuk** mengubah tinggi, lebar tubuh, wajah, rahang, hidung, mata, dan mulut. Di kota, gunakan WASD atau joystick untuk berjalan, Shift untuk lari, dan Spasi untuk lompat. Tahan Spasi atau tombol Lompat di sisi tangga panjat untuk naik ke atap. Berjalanlah ke dalam air untuk berenang atau naik ke platform kuning di belakang pustaka untuk menggunakan lift. Menu Peta memuat tujuan sungai, air terjun, rumah, bengkel, dan gerai.
+
+Gunakan **Bersama → Gabung kota bersama** untuk bertemu pemain di sekitar. Penanda hijau menandai pemain. Progres tamu dan posisi terakhir tersimpan di PostgreSQL dan ditautkan ke cookie browser. Mode sendiri menyimpan aktivitas di perangkat. Rumah singgah memulihkan energi, bengkel membuat produk dan pesanan, dan gerai menerima kiriman. Koin hanya dipakai dalam simulasi.
+
+Untuk menjalankan multiplayer Central City, atur variabel server `CITY_DATABASE_URL` ke PostgreSQL khusus kota dan jalankan `node scripts/city-schema.mjs`. Build menjalankan migrasi aditif ini otomatis saat variabel tersedia. Lab Dunia tetap menggunakan layanan tersendiri.

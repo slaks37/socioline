@@ -69,7 +69,22 @@ export const skinTones = [
 export const outfits = ["#41887c", "#bb7652", "#5e70a0", "#c49c53"];
 const legacyFaces = ["sari", "toba", "ranah", "baliem"] as const;
 export type FaceDesign = (typeof legacyFaces)[number];
+export const proportions = {
+  height: { label: "Tinggi badan", min: 150, max: 200, base: 173 },
+  build: { label: "Lebar tubuh", min: 80, max: 125, base: 100 },
+  faceWidth: { label: "Lebar wajah", min: 85, max: 115, base: 100 },
+  jaw: { label: "Lebar rahang", min: 65, max: 140, base: 100 },
+  nose: { label: "Profil hidung", min: 50, max: 155, base: 100 },
+  eyes: { label: "Ukuran mata", min: 75, max: 125, base: 100 },
+  spacing: { label: "Jarak mata", min: 80, max: 120, base: 100 },
+  mouth: { label: "Lebar mulut", min: 65, max: 140, base: 100 },
+} as const;
+export type Proportion = keyof typeof proportions;
+export function measure(avatar: AvatarData, key: Proportion) {
+  return (avatar.shape?.[key] ?? proportions[key].base) / proportions[key].base;
+}
 export type AvatarData = {
+  shape?: Partial<Record<Proportion, number>>;
   preset: "Male" | "Female";
   collection?: Collection;
   faceIndex?: number;
@@ -419,6 +434,18 @@ export function validAvatar(v: unknown): v is AvatarData {
   const a = v as AvatarData;
   if (a.preset !== "Male" && a.preset !== "Female") return false;
   if (a.collection !== undefined && !collections.includes(a.collection))
+    return false;
+  if (
+    a.shape !== undefined &&
+    (!a.shape ||
+      typeof a.shape !== "object" ||
+      Array.isArray(a.shape) ||
+      !Object.entries(a.shape).every(([key, value]) => {
+        if (!Object.hasOwn(proportions, key)) return false;
+        const { min, max } = proportions[key as Proportion];
+        return Number.isInteger(value) && value >= min && value <= max;
+      }))
+  )
     return false;
   const options = lineup(a.collection ?? "indonesia", a.preset === "Female");
   return (
