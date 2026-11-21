@@ -1,56 +1,93 @@
 "use client";
-import { useEffect, useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import * as T from "three";
-import { defaultFace, type AvatarData } from "./avatar-data";
+import { resolveLook, type AvatarData } from "./avatar-data";
 import { faceGeometry, faceTexture } from "./avatar-face";
 import { hairGeometry } from "./avatar-hair";
+import HeadAccessory from "./HeadAccessory";
 
 export default function AvatarHead({ data }: { data: AvatarData }) {
-  const face = data.face ?? defaultFace,
-    male = data.preset === "Male";
-  const sculpt = useMemo(() => faceGeometry(face, male), [face, male]);
-  const map = useMemo(
-    () => faceTexture(face, male, data.skin),
-    [face, male, data.skin],
+  const {
+    collection,
+    female,
+    faceIndex,
+    skin,
+    hairColor,
+    hair,
+    accessory,
+    outfitIndex,
+  } = resolveLook(data);
+  const sculpt = useMemo(
+    () => faceGeometry(female, faceIndex),
+    [female, faceIndex],
   );
-  const hair = useMemo(() => hairGeometry(data.hair), [data.hair]);
+  const paint = useMemo(
+    () => faceTexture(collection, female, faceIndex, skin, hairColor),
+    [collection, female, faceIndex, skin, hairColor],
+  );
+  const hood =
+    accessory === "Headscarf" || accessory === "Headwrap" || hair === "Hijab";
+  const hat = ["Peci", "Sun hat", "Cap", "Beanie"].includes(accessory);
+  const style =
+    hat && ["Afro", "Bun", "Braided bun"].includes(hair) ? "Curls" : hair;
+  const coiffure = useMemo(
+    () => (hood ? null : hairGeometry(style, hairColor, female)),
+    [hood, style, hairColor, female],
+  );
   useEffect(() => () => sculpt.dispose(), [sculpt]);
-  useEffect(() => () => map.dispose(), [map]);
-  useEffect(() => () => hair.dispose(), [hair]);
+  useEffect(() => () => paint.dispose(), [paint]);
+  useEffect(() => () => coiffure?.dispose(), [coiffure]);
   return (
     <group position={[0, 1.705, 0.009]}>
+      <mesh geometry={sculpt} scale={1.011}>
+        <meshBasicMaterial color="#51323b" side={T.BackSide} />
+      </mesh>
       <mesh geometry={sculpt} castShadow>
-        <meshStandardMaterial map={map} roughness={0.81} />
+        <meshBasicMaterial vertexColors map={paint} toneMapped={false} />
       </mesh>
       {[-1, 1].map((side) => (
         <group
           key={side}
-          position={[side * 0.148, -0.014, -0.009]}
-          rotation-z={-side * 0.17}
+          position={[side * 0.152, -0.011, -0.003]}
+          rotation-z={-side * 0.22}
         >
-          <mesh scale={[0.025, 0.045, 0.029]}>
-            <sphereGeometry args={[1, 14, 10]} />
-            <meshStandardMaterial color={data.skin} />
+          <mesh scale={[0.026, 0.047, 0.025]}>
+            <sphereGeometry args={[1, 14, 12]} />
+            <meshBasicMaterial color={skin} />
           </mesh>
           <mesh
-            position={[side * 0.022, 0, 0.005]}
-            scale={[0.003, 0.024, 0.012]}
+            position={[side * 0.021, 0.002, 0.007]}
+            scale={[0.003, 0.024, 0.011]}
           >
             <sphereGeometry args={[1, 10, 8]} />
-            <meshStandardMaterial
-              color={new T.Color(data.skin).multiplyScalar(0.68)}
+            <meshBasicMaterial
+              color={new T.Color(skin).lerp(new T.Color("#9d5b54"), 0.34)}
             />
           </mesh>
         </group>
       ))}
-      <mesh geometry={hair} castShadow>
-        <meshStandardMaterial
-          color={data.hairColor ?? "#372c29"}
-          vertexColors
-          roughness={0.68}
-          side={T.DoubleSide}
-        />
-      </mesh>
+      {coiffure && (
+        <mesh geometry={coiffure} castShadow>
+          <meshBasicMaterial
+            vertexColors
+            side={T.DoubleSide}
+            toneMapped={false}
+          />
+        </mesh>
+      )}
+      <HeadAccessory
+        accessory={accessory}
+        hood={hood}
+        collection={collection}
+        outfit={outfitIndex}
+        sunglassesRaised={
+          female &&
+          accessory === "Sunglasses" &&
+          ((outfitIndex === 0 &&
+            (collection === "amerika" || collection === "australia")) ||
+            (collection === "australia" && faceIndex === 4))
+        }
+      />
     </group>
   );
 }

@@ -373,6 +373,21 @@ export function Preview({
         intensity={1.65}
         color="#d8eeff"
       />
+      {!portrait && (
+        <mesh
+          position={[0, 0.002, 0]}
+          rotation-x={-Math.PI / 2}
+          scale={[0.39, 0.24, 1]}
+        >
+          <circleGeometry args={[1, 48]} />
+          <meshBasicMaterial
+            color="#847292"
+            transparent
+            opacity={0.24}
+            depthWrite={false}
+          />
+        </mesh>
+      )}
       <group rotation-y={rotation}>
         <Avatar data={avatar} />
       </group>

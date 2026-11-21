@@ -565,68 +565,11 @@ dialog p {
 .related button:hover {
   border-color: #788c7b;
 }
-.studio {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  border: 1px solid var(--line);
-  max-width: 900px;
-  border-radius: 12px;
-  overflow: hidden;
-  background: #fffcf4;
-}
-.preview {
-  position: relative;
-  min-height: 380px;
-  background: radial-gradient(ellipse, #c1d1b7, #91aaa1);
-}
-.preview > div {
-  position: absolute !important;
-  inset: 0;
-}
-.preview > .eyebrow,
-.studio-camera {
-  position: absolute;
-  z-index: 1;
-  left: 20px;
-  top: 20px;
-}
-.studio-camera {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  top: auto;
-  bottom: 16px;
-}
-.studio-camera .secondary {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin: 0;
-}
-.studio-choices {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.studio .studio-choices button {
-  margin: 0;
-}
-.options {
-  padding: 25px;
-}
-.options fieldset {
-  border: 0;
-  padding: 0;
-  margin: 0 0 14px;
-}
-.options legend,
-.options label,
 dialog label {
   font-weight: 650;
   font-size: 14px;
   margin-bottom: 6px;
 }
-.options fieldset button,
 .secondary {
   border: 1px solid #bfcabd;
   background: var(--paper);
@@ -634,33 +577,12 @@ dialog label {
   padding: 7px 11px;
   margin-right: 6px;
 }
-.options button[aria-pressed="true"] {
-  outline: 2px solid #245951;
-  outline-offset: 1px;
-  background: #e0eadd;
-}
-.options .swatch {
-  width: 30px;
-  height: 28px;
-  border: 2px solid white;
-}
-.options label:not(.check) {
-  display: grid;
-  gap: 6px;
-}
-.options input:not([type="checkbox"]),
 select {
   border: 1px solid var(--line);
   border-radius: 4px;
   padding: 8px;
   background: white;
   color: var(--ink);
-}
-.options .check {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 14px 0;
 }
 .directory {
   margin-top: 25px;
@@ -924,15 +846,6 @@ dialog label {
   }
   footer {
     display: grid;
-  }
-  .studio {
-    grid-template-columns: 1fr;
-  }
-  .preview {
-    min-height: 260px;
-  }
-  .options {
-    padding: 18px;
   }
   .explore,
   .article {

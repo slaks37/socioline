@@ -1,70 +1,21 @@
 "use client";
+
+import { useMemo, useRef, type RefObject } from "react";
 import * as T from "three";
-import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import AvatarHead from "./AvatarHead";
-import type { AvatarData } from "./avatar-data";
-const sphere = new T.SphereGeometry(1, 16, 12);
-// Ring profiles taper at the jaw, cuffs, waist and ankles. Geometry is shared between limbs.
-function profile(points: number[][]) {
-  return new T.LatheGeometry(
-    points.map(([radius, height]) => new T.Vector2(radius, height)),
-    24,
-  );
-}
-const fabric = profile([
-  [0, -0.01],
-  [0.85, 0],
-  [0.91, 0.06],
-  [0.84, 0.2],
-  [0.94, 0.35],
-  [1, 0.44],
-  [0.94, 0.47],
-  [0.42, 0.53],
-  [0, 0.53],
-]);
-const thigh = profile([
-  [0, -0.45],
-  [0.69, -0.445],
-  [0.79, -0.38],
-  [0.91, -0.23],
-  [1, -0.075],
-  [0.85, 0],
-  [0, 0.025],
-]);
-const shin = profile([
-  [0, -0.38],
-  [0.72, -0.379],
-  [0.75, -0.3],
-  [0.97, -0.15],
-  [0.93, -0.055],
-  [0.83, 0],
-  [0, 0.015],
-]);
-const sleeve = profile([
-  [0, -0.246],
-  [0.82, -0.24],
-  [0.88, -0.2],
-  [1, -0.095],
-  [0.89, 0],
-  [0.52, 0.04],
-  [0, 0.054],
-]);
-function Oval({
-  p,
-  s,
-  c,
-}: {
-  p: [number, number, number];
-  s: [number, number, number];
-  c: string;
-}) {
-  return (
-    <mesh geometry={sphere} position={p} scale={s} castShadow>
-      <meshStandardMaterial color={c} roughness={0.85} />
-    </mesh>
-  );
-}
+import { resolveLook, type AvatarData } from "./avatar-data";
+import { getGarment } from "./avatar-wardrobe";
+import {
+  Carry,
+  ClothMesh,
+  Oval,
+  Trim,
+  uprightNeck,
+  useTailor,
+} from "./avatar-tailoring";
+import { useCloth } from "./avatar-cloth";
+
 export default function Avatar({
   data,
   speed,
@@ -72,152 +23,285 @@ export default function Avatar({
   vertical,
 }: {
   data: AvatarData;
-  speed?: React.RefObject<number>;
+  speed?: RefObject<number>;
   reading?: boolean;
-  vertical?: React.RefObject<number>;
+  vertical?: RefObject<number>;
 }) {
+  const { collection, female, outfitIndex, skin } = resolveLook(data);
+  const garment = getGarment(collection, female, outfitIndex);
+  const pieces = useTailor(garment, female);
+  const maps = useCloth(garment, collection, female, outfitIndex);
+  const skirted = garment.bottom === "skirt" || garment.bottom === "dress";
+  const shorts = garment.bottom === "shorts",
+    sandals = garment.shoes === "sandals",
+    flats = garment.shoes === "flats";
+  const shoulder = female ? 0.19 : 0.215;
   const legs = useRef<(T.Group | null)[]>([]),
     knees = useRef<(T.Group | null)[]>([]),
-    arms = useRef<(T.Group | null)[]>([]),
-    phase = useRef(0),
+    arms = useRef<(T.Group | null)[]>([]);
+  const upperBody = useRef<T.Group>(null),
+    hips = useRef<T.Group>(null);
+  const phase = useRef(0),
     gait = useRef(0);
-  const { skin, outfit, preset } = data;
-  const jacket = data.garment !== "T-shirt";
-  const width = preset === "Male" ? 0.285 : 0.25;
-  useFrame((_, dt) => {
-    gait.current = T.MathUtils.damp(gait.current, speed?.current ?? 0, 12, dt);
-    const motion = gait.current;
-    phase.current += dt * (motion > 5 ? 13 : 9);
+  const skirtPositions = pieces.skirt.getAttribute(
+    "position",
+  ) as T.BufferAttribute;
+  const restSkirt = useMemo(
+    () => new Float32Array(skirtPositions.array),
+    [skirtPositions],
+  );
+  useFrame((_, rawDt) => {
+    const dt = Math.min(rawDt, 0.08);
+    gait.current = T.MathUtils.damp(gait.current, speed?.current ?? 0, 10, dt);
+    const motion = gait.current,
+      stride = Math.min(motion / 4.5, 1),
+      running = motion > 5;
+    phase.current += dt * (motion > 0.08 ? (running ? 12.8 : 9.4) : 1.7);
+    const phaseAngle = phase.current,
+      swing = Math.sin(phaseAngle) * stride * (skirted ? 0.42 : 0.65);
+    const bounce = (1 - Math.cos(phaseAngle * 2)) * 0.011 * stride;
+    if (upperBody.current) {
+      upperBody.current.position.y =
+        bounce + Math.sin(phaseAngle) * 0.004 * (1 - stride);
+      upperBody.current.rotation.z = 0.025 * stride * Math.sin(phaseAngle);
+      upperBody.current.rotation.y = 0.062 * stride * Math.cos(phaseAngle);
+      upperBody.current.rotation.x = running ? 0.035 : 0.005;
+    }
+    if (hips.current) hips.current.position.y = bounce;
     for (let i = 0; i < 2; i++) {
-      const swing =
-        Math.sin(phase.current + i * Math.PI) * Math.min(motion / 5, 1) * 0.65;
-      if (legs.current[i]) legs.current[i]!.rotation.x = swing;
-      if (knees.current[i])
-        knees.current[i]!.rotation.x = Math.max(0, -swing) * 0.95;
-      if (arms.current[i]) {
+      const direction = i === 0 ? -1 : 1;
+      const leg = legs.current[i],
+        knee = knees.current[i],
+        arm = arms.current[i];
+      const angle = swing * direction;
+      if (leg) leg.rotation.x = angle;
+      if (knee) knee.rotation.x = Math.max(0, -angle) * (running ? 1.18 : 0.87);
+      if (arm) {
         const aim = reading
-          ? -0.77 + Math.sin(phase.current * 0.19 + i) * 0.13
-          : -swing +
-            Math.sin(phase.current * 0.24 + i) * 0.035 -
-            (Math.abs(vertical?.current ?? 0) > 0.6 ? 0.22 : 0);
-        arms.current[i]!.rotation.x = T.MathUtils.damp(
-          arms.current[i]!.rotation.x,
-          aim,
-          11,
-          dt,
+          ? -0.66 + Math.sin(phaseAngle * 0.65 + i) * 0.07
+          : -angle * 0.92 +
+            Math.sin(phaseAngle + i) * 0.025 -
+            (Math.abs(vertical?.current ?? 0) > 0.6 ? 0.26 : 0);
+        arm.rotation.x = T.MathUtils.damp(arm.rotation.x, aim, 12, dt);
+      }
+    }
+    if (
+      skirted &&
+      (stride > 0.001 ||
+        Math.abs(skirtPositions.getZ(0) - restSkirt[2]) > 0.001)
+    ) {
+      // Let each half of the pleated hem follow its nearest thigh, blending at the centre seam.
+      for (let i = 0; i < skirtPositions.count; i++) {
+        const x = restSkirt[i * 3],
+          y = restSkirt[i * 3 + 1],
+          z = restSkirt[i * 3 + 2];
+        const weight = T.MathUtils.smoothstep(1.06 - y, 0.02, 0.78);
+        const side = T.MathUtils.clamp(x / 0.12, -1, 1);
+        const fold = side * swing * (1.06 - y) * weight;
+        skirtPositions.setXYZ(
+          i,
+          x,
+          y + weight * Math.abs(fold) * 0.1,
+          z - fold,
         );
       }
+      skirtPositions.needsUpdate = true;
     }
   });
   return (
     <group>
-      <mesh
-        geometry={fabric}
-        position={[0, 0.956, 0]}
-        scale={[width, 1, 0.155]}
-        castShadow
-      >
-        <meshStandardMaterial color={outfit} />
-      </mesh>
-      <Oval
-        p={[0, 1.467, 0.02]}
-        s={[0.108, 0.027, 0.089]}
-        c={jacket ? "#e8dec5" : outfit}
-      />
-      {jacket && (
-        <group>
-          <mesh position={[0, 1.215, 0.14]}>
-            <boxGeometry args={[0.023, 0.47, 0.015]} />
-            <meshStandardMaterial color="#695c41" />
-          </mesh>
-          {[1.05, 1.17, 1.29, 1.405].map((y) => (
-            <Oval
-              key={y}
-              p={[0, y, 0.153]}
-              s={[0.013, 0.013, 0.006]}
-              c="#d4c39f"
-            />
-          ))}
-          {[-1, 1].map((k) => (
-            <group key={k}>
-              <mesh position={[k * 0.121, 1.292, 0.132]} rotation-y={k * 0.27}>
-                <boxGeometry args={[0.09, 0.075, 0.012]} />
-                <meshStandardMaterial color={outfit} />
-              </mesh>
-              <mesh position={[k * 0.121, 1.332, 0.14]} rotation-y={k * 0.27}>
-                <boxGeometry args={[0.105, 0.019, 0.015]} />
-                <meshStandardMaterial color="#bcb292" />
-              </mesh>
-              <mesh position={[k * 0.07, 1.44, 0.093]} rotation-z={k * 0.55}>
-                <boxGeometry args={[0.095, 0.06, 0.024]} />
-                <meshStandardMaterial color={outfit} />
-              </mesh>
-            </group>
-          ))}
-        </group>
-      )}
-      <Oval p={[0, 0.94, 0]} s={[0.22, 0.18, 0.15]} c="#39494e" />
-      <Oval p={[0, 1.5, 0]} s={[0.089, 0.12, 0.085]} c={skin} />
-      <AvatarHead data={data} />
-      {[-1, 1].map((k, i) => (
-        <group key={k}>
+      <group ref={hips}>
+        <ClothMesh geometry={pieces.hips} color={garment.pants} />
+        {([-1, 1] as const).map((side, i) => (
           <group
-            position={[k * 0.114, 0.94, 0]}
-            ref={(n) => {
-              legs.current[i] = n;
+            key={side}
+            position={[side * (female ? 0.083 : 0.091), 0.925, 0]}
+            ref={(el) => {
+              legs.current[i] = el;
             }}
           >
-            <mesh geometry={thigh} scale={[0.112, 1, 0.125]} castShadow>
-              <meshStandardMaterial color="#3e555b" />
-            </mesh>
+            {!skirted && (
+              <ClothMesh
+                geometry={pieces.thigh}
+                color={garment.pants}
+                outline
+              />
+            )}
+            {shorts && <ClothMesh geometry={pieces.bareThigh} color={skin} />}
+            {garment.bottom === "cargo" && (
+              <group
+                position={[side * 0.079, -0.191, 0]}
+                rotation-z={side * -0.06}
+              >
+                <Oval
+                  p={[0, 0, 0]}
+                  s={[0.026, 0.085, 0.074]}
+                  color={garment.pants}
+                />
+                <Trim
+                  p={[side * 0.021, 0.047, 0.005]}
+                  s={[0.007, 0.014, 0.105]}
+                  color="#8c7d70"
+                />
+              </group>
+            )}
             <group
-              position={[0, -0.436, 0]}
-              ref={(n) => {
-                knees.current[i] = n;
+              position={[0, -0.402, 0]}
+              ref={(el) => {
+                knees.current[i] = el;
               }}
             >
-              <mesh geometry={shin} scale={[0.092, 1, 0.099]} castShadow>
-                <meshStandardMaterial color="#40565a" />
-              </mesh>
-              <Oval
-                p={[0, -0.4, 0.046]}
-                s={[0.093, 0.074, 0.148]}
-                c="#ae8964"
+              <ClothMesh
+                geometry={shorts || skirted ? pieces.calf : pieces.shin}
+                color={shorts || skirted ? skin : garment.pants}
+                outline={!skirted}
               />
-              <Oval
-                p={[0, -0.438, 0.061]}
-                s={[0.097, 0.035, 0.155]}
-                c="#ede3c9"
-              />
-              {[-0.015, 0.018, 0.051].map((z) => (
+              <group position={[0, -0.523, 0.012]} scale={[1, 1, 1]}>
+                <ClothMesh
+                  geometry={pieces.shoe}
+                  color={sandals ? skin : flats ? "#ebd5b6" : "#ebe5e3"}
+                />
+                <ClothMesh
+                  geometry={pieces.sole}
+                  color={sandals ? "#a27754" : flats ? "#aa8060" : "#dcd4d6"}
+                  outline
+                />
+                {sandals || flats ? (
+                  <group>
+                    <Trim
+                      p={[0, 0.069, 0.078]}
+                      s={[0.107, 0.016, 0.029]}
+                      color={sandals ? "#997654" : "#d7b38c"}
+                    />
+                    {sandals && (
+                      <Trim
+                        p={[0, 0.098, -0.014]}
+                        s={[0.103, 0.017, 0.034]}
+                        color="#bd9168"
+                      />
+                    )}
+                  </group>
+                ) : (
+                  <group>
+                    {[0.015, 0.042, 0.068].map((z, j) => (
+                      <Trim
+                        key={z}
+                        p={[0, 0.099 - j * 0.009, z]}
+                        s={[0.074 - j * 0.005, 0.004, 0.008]}
+                        color="#b6abae"
+                        tilt={(j - 1) * 0.035}
+                      />
+                    ))}
+                  </group>
+                )}
+              </group>
+              {!shorts && !skirted && (
                 <Oval
-                  key={z}
-                  p={[0, -0.343, z + 0.048]}
-                  s={[0.059, 0.007, 0.009]}
-                  c="#e5dbc1"
+                  p={[0, -0.416, -0.012]}
+                  s={[0.06, 0.058, 0.065]}
+                  color={garment.pants}
+                />
+              )}
+              {(shorts || skirted) && (
+                <Oval
+                  p={[0, -0.408, -0.005]}
+                  s={[0.044, 0.066, 0.048]}
+                  color={sandals || flats ? skin : "#f3e8db"}
+                />
+              )}
+            </group>
+          </group>
+        ))}
+        {skirted && (
+          <ClothMesh geometry={pieces.skirt} map={maps.lower} outline />
+        )}
+        {garment.waist === "plaid" && (
+          <group position={[0, 1.034, 0]}>
+            <mesh scale={[0.183, 0.046, 0.13]}>
+              <sphereGeometry args={[1, 32, 12]} />
+              <meshBasicMaterial color="#874a48" />
+            </mesh>
+            {[-1, 1].map((side) => (
+              <group
+                key={side}
+                position={[side * 0.09, -0.107, 0.118]}
+                rotation-z={side * 0.24}
+              >
+                <Oval p={[0, 0, 0]} s={[0.043, 0.159, 0.025]} color="#924e49" />
+                {[-0.09, -0.016, 0.059].map((y) => (
+                  <Trim
+                    key={y}
+                    p={[0, y, 0.022]}
+                    s={[0.066, 0.012, 0.002]}
+                    color="#34364b"
+                  />
+                ))}
+                <Trim
+                  p={[0, 0, 0.024]}
+                  s={[0.012, 0.236, 0.002]}
+                  color="#34364b"
+                />
+              </group>
+            ))}
+          </group>
+        )}
+      </group>
+      <group ref={upperBody}>
+        <group position={[0, 1.455, 0]}>
+          <ClothMesh geometry={uprightNeck} color={skin} />
+        </group>
+        <ClothMesh geometry={pieces.torso} map={maps.torso} outline />
+        {garment.top === "hoodie" && (
+          <Oval
+            p={[0, 1.398, -0.098]}
+            s={[0.146, 0.1, 0.064]}
+            color={garment.color}
+          />
+        )}
+        {([-1, 1] as const).map((side, i) => (
+          <group
+            key={side}
+            position={[side * shoulder, 1.411, 0]}
+            rotation-z={side * 0.076}
+            ref={(el) => {
+              arms.current[i] = el;
+            }}
+          >
+            <ClothMesh geometry={pieces.arm} color={skin} />
+            {garment.sleeve !== "bare" && (
+              <ClothMesh geometry={pieces.sleeve} map={maps.sleeve} outline />
+            )}
+            <group position={[0, -0.47, 0]} rotation-z={side * -0.075}>
+              <Oval
+                p={[0, -0.041, 0.003]}
+                s={[0.037, 0.063, 0.026]}
+                color={skin}
+                tilt={side * 0.05}
+              />
+              <Oval
+                p={[-side * 0.023, -0.028, 0.024]}
+                s={[0.014, 0.034, 0.014]}
+                color={skin}
+                tilt={side * -0.3}
+              />
+              {[-1, 0, 1].map((finger) => (
+                <Oval
+                  key={finger}
+                  p={[
+                    side * finger * 0.016,
+                    -0.083 + 0.005 * Math.abs(finger),
+                    0.008,
+                  ]}
+                  s={[0.011, 0.029, 0.013]}
+                  color={skin}
                 />
               ))}
             </group>
           </group>
-          <group
-            position={[k * width * 0.93, 1.37, 0]}
-            rotation-z={k * 0.085}
-            ref={(n) => {
-              arms.current[i] = n;
-            }}
-          >
-            <mesh
-              geometry={sleeve}
-              scale={[0.096, jacket ? 1.2 : 1, 0.1]}
-              castShadow
-            >
-              <meshStandardMaterial color={outfit} />
-            </mesh>
-            <Oval p={[0, -0.356, 0]} s={[0.066, 0.167, 0.071]} c={skin} />
-            <Oval p={[0, -0.514, 0.008]} s={[0.065, 0.087, 0.054]} c={skin} />
-          </group>
-        </group>
-      ))}
+        ))}
+        <Carry bag={garment.bag} />
+        <AvatarHead data={data} />
+      </group>
     </group>
   );
 }

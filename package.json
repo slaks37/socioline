@@ -13,7 +13,7 @@
     "prebuild": "npm run content",
     "predev": "npm run content",
     "pretypecheck": "npm run content",
-    "test": "node --test scripts/content.test.mjs",
+    "test": "node --test scripts/content.test.mjs scripts/avatar.test.mjs",
     "perf": "node scripts/performance.mjs",
     "editor": "node scripts/editorial.mjs",
     "art": "node scripts/art/landmarks.mjs",

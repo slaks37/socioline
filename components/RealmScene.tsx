@@ -3,7 +3,7 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as T from "three";
 import Avatar from "./Avatar";
-import { initialAvatar } from "./avatar-data";
+import { initialAvatar, selectCollection, selectOutfit } from "./avatar-data";
 import {
   elevation,
   type Chunk,
@@ -11,6 +11,8 @@ import {
   type Peer,
   type Specification,
 } from "../engine/world.ts";
+const guestLook = selectCollection(initialAvatar, "australia");
+const guideLook = selectOutfit(selectCollection(initialAvatar, "afrika"), 3);
 type Props = {
   chunks: Chunk[];
   objects: Entity[];
@@ -231,12 +233,7 @@ function Walker({
   return (
     <group ref={ref}>
       <Avatar
-        data={
-          peer.look ?? {
-            ...initialAvatar,
-            outfit: mine ? "#41887c" : "#bb7652",
-          }
-        }
+        data={peer.look ?? (mine ? initialAvatar : guestLook)}
         speed={speed}
       />
     </group>
@@ -360,7 +357,7 @@ export default function RealmScene(props: Props) {
         />
       ))}
       <group position={[-2, elevation(seed, spec, -2, -2), -2]}>
-        <Avatar data={{ ...initialAvatar, outfit: "#c49c53", hair: "Curls" }} />
+        <Avatar data={guideLook} />
       </group>
       <Controller {...props} />
     </Canvas>

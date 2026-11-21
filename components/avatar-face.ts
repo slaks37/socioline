@@ -1,253 +1,255 @@
 import * as T from "three";
-import type { FaceDesign } from "../engine/avatar";
 
-type Sculpt = {
-  jaw: number;
-  cheek: number;
-  eyeSpacing: number;
-  eyeTilt: number;
-  browArch: number;
-  nose: number;
-  mouth: number;
+type Portrait = "gentle" | "bright" | "laugh" | "wink" | "smirk" | "calm";
+const expressions: Record<string, [Portrait[], Portrait[]]> = {
+  indonesia: [
+    ["gentle", "calm", "wink", "laugh", "smirk", "smirk"],
+    ["gentle", "bright", "laugh", "calm", "wink", "gentle"],
+  ],
+  tiongkok: [
+    ["gentle", "gentle", "wink", "laugh", "smirk", "calm"],
+    ["gentle", "bright", "laugh", "calm", "wink", "gentle"],
+  ],
+  amerika: [
+    ["gentle", "calm", "laugh", "wink", "smirk", "smirk"],
+    ["gentle", "bright", "wink", "calm", "laugh", "gentle"],
+  ],
+  afrika: [
+    ["gentle", "calm", "wink", "laugh", "smirk", "laugh", "smirk"],
+    ["gentle", "bright", "laugh", "calm", "wink", "smirk"],
+  ],
+  australia: [
+    ["gentle", "gentle", "laugh", "wink", "smirk", "gentle"],
+    ["gentle", "bright", "laugh", "calm", "wink", "smirk"],
+  ],
 };
 
-// Individual portrait sculpts; each can be combined with either base and any palette.
-const sculpts: Record<FaceDesign, Sculpt> = {
-  sari: {
-    jaw: 0.92,
-    cheek: 0.97,
-    eyeSpacing: 42,
-    eyeTilt: 2,
-    browArch: 4,
-    nose: 0.91,
-    mouth: 0.91,
-  },
-  toba: {
-    jaw: 1.16,
-    cheek: 1.03,
-    eyeSpacing: 46,
-    eyeTilt: 0,
-    browArch: 2,
-    nose: 1.09,
-    mouth: 1.03,
-  },
-  ranah: {
-    jaw: 0.83,
-    cheek: 1.01,
-    eyeSpacing: 40,
-    eyeTilt: 3,
-    browArch: 6,
-    nose: 1.03,
-    mouth: 0.97,
-  },
-  baliem: {
-    jaw: 1.04,
-    cheek: 1.07,
-    eyeSpacing: 44,
-    eyeTilt: 1,
-    browArch: 3,
-    nose: 0.96,
-    mouth: 1.13,
-  },
-};
-const skull = [
-  // vertical fraction, half width, depth, forward offset
-  [0, 0.0005, 0.001, -0.01],
-  [0.06, 0.106, 0.093, -0.016],
-  [0.16, 0.148, 0.142, -0.016],
-  [0.31, 0.164, 0.16, -0.014],
-  [0.47, 0.159, 0.159, -0.014],
-  [0.57, 0.153, 0.153, -0.009],
-  [0.66, 0.143, 0.14, -0.004],
-  [0.78, 0.123, 0.12, 0.003],
-  [0.89, 0.092, 0.085, 0.028],
-  [0.96, 0.057, 0.049, 0.045],
-  [1, 0.0005, 0.001, 0.051],
+// Cross-sections progress from the crown through the cheeks to the pointed chin.
+const rings = [
+  [0, 0.001, 0.001, -0.02],
+  [0.09, 0.12, 0.115, -0.02],
+  [0.23, 0.159, 0.157, -0.016],
+  [0.38, 0.166, 0.167, -0.012],
+  [0.53, 0.165, 0.158, -0.005],
+  [0.625, 0.157, 0.145, 0.001],
+  [0.71, 0.14, 0.129, 0.011],
+  [0.82, 0.106, 0.103, 0.023],
+  [0.935, 0.053, 0.058, 0.037],
+  [1, 0.001, 0.001, 0.05],
 ];
-const headProfile = new T.CubicInterpolant(
-  Float32Array.from(skull, ([fraction]) => fraction),
-  Float32Array.from(skull.flatMap(([, ...dimensions]) => dimensions)),
+const profile = new T.CubicInterpolant(
+  Float32Array.from(rings, (r) => r[0]),
+  Float32Array.from(rings.flatMap((r) => r.slice(1))),
   3,
 );
-const bell = (a: number) => Math.exp(-a * a);
-export function faceGeometry(id: FaceDesign, male: boolean) {
-  const s = sculpts[id],
-    columns = 80,
-    rows = 60;
-  const pos: number[] = [],
-    uv: number[] = [],
-    index: number[] = [];
+const bell = (x: number) => Math.exp(-x * x);
+
+export function faceGeometry(female: boolean, index: number) {
+  const columns = 72,
+    rows = 50;
+  const positions: number[] = [],
+    uvs: number[] = [],
+    indices: number[] = [];
   for (let row = 0; row <= rows; row++) {
-    const t = row / rows,
-      y = t * 200;
-    const [width, depth, offset] = headProfile.evaluate(t);
-    const jaw = (s.jaw - 1 + (male ? 0.09 : 0)) * bell((t - 0.8) / 0.135);
-    const cheek = (s.cheek - 1) * bell((t - 0.57) / 0.13);
+    const v = row / rows;
+    const [rx, rz, offset] = profile.evaluate(v);
+    const jaw =
+      (female ? -0.045 : 0.035) +
+      [0, -0.025, 0.025, -0.01, 0.055, -0.035, 0.03][index % 7];
     for (let col = 0; col <= columns; col++) {
-      const angle = (col / columns - 0.5) * Math.PI * 2;
-      const x = angle * 100,
-        ax = Math.abs(x);
-      const arc = Math.cos(angle);
-      const plane = (cx: number, cy: number, sx: number, sy: number) =>
-        bell((ax - cx) / sx) * bell((y - cy) / sy);
-      let z = offset + depth * arc;
-      if (arc > 0) {
-        // A flatter facial mask, recessed orbit, brow, malar and muzzle planes.
-        z += 0.023 * Math.sin(angle) ** 2 * arc;
-        z +=
-          0.011 * plane(65, 116, 25, 17) -
-          0.01 * plane(s.eyeSpacing, 100, 21, 8);
-        z += (male ? 0.012 : 0.009) * plane(40, 86, 29, 7);
-        z +=
-          0.029 * plane(0, 110, 10, 19) +
-          0.04 * plane(0, 125, 11 * s.nose, 7.5);
-        z += 0.017 * plane(12 * s.nose, 128, 6.5, 4.5);
-        z += 0.008 * plane(0, 148, 32, 11) + 0.009 * plane(0, 157, 18, 3.4);
-        z += 0.012 * plane(0, 179, 25, 8);
-      }
-      pos.push(
-        Math.sin(angle) * width * (1 + jaw + cheek),
-        (0.51 - t) * (male ? 0.416 : 0.4),
-        z,
+      const u = col / columns,
+        angle = (u - 0.5) * 2 * Math.PI,
+        c = Math.cos(angle),
+        s = Math.sin(angle);
+      const front = Math.max(c, 0),
+        lateral = Math.abs(angle);
+      // A broad plane across both eyes and a continuous nose bridge give an illustrated profile.
+      const mask = 0.028 * s * s * front;
+      const bridge = 0.028 * bell(lateral / 0.125) * bell((v - 0.58) / 0.094);
+      const nose = 0.028 * bell(lateral / 0.132) * bell((v - 0.64) / 0.038);
+      const cheek =
+        0.008 * bell((lateral - 0.68) / 0.26) * bell((v - 0.625) / 0.095);
+      const muzzle = 0.009 * bell(lateral / 0.37) * bell((v - 0.76) / 0.073);
+      positions.push(
+        s * rx * (1 + jaw * bell((v - 0.79) / 0.16)),
+        (0.51 - v) * (female ? 0.407 : 0.419),
+        offset + rz * c + mask + bridge + nose + cheek + muzzle,
       );
-      uv.push(col / columns, 1 - t);
+      uvs.push(u, 1 - v);
       if (row && col) {
         const d = row * (columns + 1) + col,
           a = d - columns - 2;
-        index.push(a, d - 1, d, a, d, a + 1);
+        indices.push(a, d - 1, d, a, d, a + 1);
       }
     }
   }
-  const result = new T.BufferGeometry();
-  result.setAttribute("position", new T.Float32BufferAttribute(pos, 3));
-  result.setAttribute("uv", new T.Float32BufferAttribute(uv, 2));
-  result.setIndex(index);
-  result.computeVertexNormals();
-  return result;
+  const geometry = new T.BufferGeometry();
+  geometry.setAttribute("position", new T.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("uv", new T.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  const normals = geometry.getAttribute("normal"),
+    shades: number[] = [];
+  for (let i = 0; i < normals.count; i++) {
+    const amount =
+      normals.getZ(i) * 0.68 + normals.getY(i) * 0.51 - normals.getX(i) * 0.36;
+    const shade = T.MathUtils.smoothstep(amount, -0.1, 0.22);
+    shades.push(0.77 + 0.23 * shade, 0.65 + 0.35 * shade, 0.65 + 0.35 * shade);
+  }
+  geometry.setAttribute("color", new T.Float32BufferAttribute(shades, 3));
+  return geometry;
 }
 
-export function faceTexture(id: FaceDesign, male: boolean, skin: string) {
-  const s = sculpts[id],
-    canvas = document.createElement("canvas");
+export function faceTexture(
+  collection: string,
+  female: boolean,
+  index: number,
+  skin: string,
+  hairColor: string,
+) {
+  const expression =
+    (expressions[collection] ?? expressions.indonesia)[female ? 1 : 0][index] ??
+    "gentle";
+  const canvas = document.createElement("canvas");
   canvas.width = 1024;
   canvas.height = 512;
   const ctx = canvas.getContext("2d")!;
   ctx.fillStyle = skin;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.setTransform(
-    canvas.width / (200 * Math.PI),
+    canvas.width / (Math.PI * 200),
     0,
     0,
     canvas.height / 200,
-    canvas.width / 2,
+    canvas.width * 0.5,
     0,
   );
-  const shape = (d: string, color: string) => {
+  function fill(d: string, color: string | CanvasGradient) {
     ctx.fillStyle = color;
     ctx.fill(new Path2D(d));
-  };
-  const line = (d: string, color: string, width: number) => {
+  }
+  function stroke(d: string, color: string, width: number) {
     ctx.strokeStyle = color;
     ctx.lineWidth = width;
     ctx.lineCap = "round";
+    ctx.lineJoin = "round";
     ctx.stroke(new Path2D(d));
-  };
-  const glow = (
+  }
+  function ellipse(
     x: number,
     y: number,
     rx: number,
     ry: number,
-    color: string,
-  ) => {
+    color: string | CanvasGradient,
+  ) {
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, 0, 0, 2 * Math.PI);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+  function blush(x: number, y: number, rx: number, ry: number) {
     ctx.save();
     ctx.translate(x, y);
     ctx.scale(rx, ry);
-    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
-    g.addColorStop(0, color);
-    g.addColorStop(1, "transparent");
-    ctx.fillStyle = g;
+    const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+    grad.addColorStop(0, "rgba(241,114,112,.33)");
+    grad.addColorStop(1, "rgba(234,115,115,0)");
+    ctx.fillStyle = grad;
     ctx.fillRect(-1, -1, 2, 2);
     ctx.restore();
-  };
-  const ellipse = (
-    x: number,
-    y: number,
-    rx: number,
-    ry: number,
-    color: string,
-  ) => {
-    ctx.beginPath();
-    ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.fill();
-  };
+  }
+  const warm = skin.toLowerCase(),
+    dark = ["#583b31", "#895c43", "#70432d", "#854b2f"].includes(warm);
+  const ink = dark ? "#291923" : "#392431",
+    outline = dark ? "#523239" : "#91574d";
+  const brow = new T.Color(hairColor)
+    .lerp(new T.Color("#553127"), 0.42)
+    .getStyle();
+  const ember = collection === "australia" && index === 2;
   for (const sign of [-1, 1]) {
     ctx.save();
     ctx.scale(sign, 1);
-    glow(61, 119, 32, 15, "rgba(173,61,54,.24)");
-    glow(21, 123, 13, 9, "rgba(105,52,41,.17)");
-    glow(65, 110, 28, 4, "rgba(255,213,158,.16)");
-    glow(85, 144, 36, 31, "rgba(94,52,42,.11)");
-    ctx.translate(s.eyeSpacing, 100);
-    ctx.rotate((-s.eyeTilt * Math.PI) / 180);
-    ctx.scale(male ? 0.95 : 1, male ? 0.85 : 1);
-    glow(0, -3, 31, 14, "rgba(98,48,43,.31)");
-    line("M-20 -4 Q0 -16 23 -6", "rgba(88,48,41,.48)", 0.85);
-    const eye = new Path2D(
-      "M-24 2 Q-2 -11 21 -4 L25 -5 Q14 5 2 6 Q-11 7 -24 2Z",
-    );
-    ctx.save();
-    ctx.clip(eye);
-    ctx.fillStyle = "#eadbc9";
-    ctx.fillRect(-26, -12, 54, 24);
-    glow(3, 5, 24, 7, "#fff5e6");
-    ellipse(0, -0.3, 8.8, 7.8, "#32251e");
-    ellipse(0, 0, 7.4, 6.6, "#664937");
-    glow(0, 3, 7, 3.7, "#bc8a59");
-    ellipse(0, -0.8, 4.1, 4.2, "#2a201e");
-    ellipse(-2.9 * sign, -2.85, 2.1, 1.5, "#fff8e9");
-    ellipse(2.6 * sign, 2.8, 0.9, 0.7, "#dfba93");
-    ctx.restore();
-    shape("M-24 2 Q-2 -12 21 -5 L28 -8 Q25 -4 22 -3 Q-1 -9 -24 2Z", "#463029");
-    line("M4 6 Q15 5 21 -1", "rgba(83,51,42,.63)", 0.75);
-    line("M-17 7 Q-6 10 8 8", "rgba(255,222,182,.33)", 1.0);
-    // Tapered brow with individual edge strokes.
-    ctx.translate(0, -12 - s.browArch / 2);
-    ctx.rotate(0.07);
-    shape(
-      `M-23 0 Q-12 -4 4 ${-4 - s.browArch} Q17 -7 27 -2 Q14 -5 5 -4 Q-15 2 -22 3Z`,
-      male ? "#563a2d" : "#644332",
-    );
-    for (let i = 0; i < 7; i++) {
-      line(`M${-22 + i * 2} ${2 - i * 0.3} l3 -3.3`, "rgba(64,43,35,.45)", 0.7);
+    blush(68, 124, 24, 9);
+    if (!female && collection === "australia" && index === 4) {
+      for (let i = 0; i < 9; i++)
+        ellipse(22 + i * 5.5, 123 + 2 * Math.sin(i * 4), 0.8, 0.64, "#af7659");
     }
-    ctx.restore();
-    ctx.save();
-    ctx.scale(sign * s.nose, 1);
-    shape(
-      "M5 129 Q10 125.5 15 128 Q14 130 11 130 Q8 130.3 5 129Z",
-      "rgba(92,48,41,.74)",
+    const eyeY = female ? 103 : 104;
+    ctx.translate((female ? 44 : 42) + ((index % 3) - 1) * 1.5, eyeY);
+    ctx.rotate((female ? -0.085 : -0.035) + ((index % 3) - 1) * 0.03);
+    ctx.scale(female ? 1 : 0.97, female ? 1 : 0.77);
+    const shut =
+      expression === "laugh" || (expression === "wink" && sign === 1);
+    if (shut) {
+      fill(
+        "M-26 4 C-14 -8 -3 -17 13 -15 Q23 -15 29 -12 Q21 -14 15 -10 Q-7 -9 -26 4Z",
+        ink,
+      );
+      stroke("M-19 4 Q-8 1 -3 2", "rgba(162,81,72,.55)", 0.8);
+    } else {
+      const eye =
+        "M-26 3 Q-20 -9 -8 -13 Q8 -18 24 -13 Q28 -5 24 2 Q18 13 5 14 Q-13 15 -26 3Z";
+      ctx.save();
+      ctx.clip(new Path2D(eye));
+      const white = ctx.createLinearGradient(0, -15, 0, 15);
+      white.addColorStop(0, "#d3c6ca");
+      white.addColorStop(0.4, "#fff9f1");
+      white.addColorStop(1, "#fffefa");
+      ctx.fillStyle = white;
+      ctx.fillRect(-30, -20, 65, 40);
+      const iris = ctx.createLinearGradient(0, -13, 0, 14);
+      iris.addColorStop(0, "#221a27");
+      iris.addColorStop(0.35, "#3b2732");
+      iris.addColorStop(0.67, ember ? "#8e753e" : "#92532e");
+      iris.addColorStop(1, ember ? "#d7ac65" : "#e7a76d");
+      ellipse(-0.3, -0.5, 12.7, 15.2, "#38232a");
+      ellipse(-0.3, -0.2, 11.2, 14.1, iris);
+      ellipse(-1, -1.5, 5.4, 8.6, "#2a1c26");
+      stroke("M-7 9 Q-.8 14.4 7.3 8.4", "#efb882", 1.25);
+      ellipse(-4.3 * sign, -7.6, 3.9, 3.3, "#fffdf0");
+      ellipse(5.2 * sign, 5.7, 1.7, 1.4, "#ffebbd");
+      ctx.restore();
+      fill(
+        "M-26 3 Q-18 -14 0 -17 Q13 -20 24 -15 Q29 -14 32 -19 Q31 -14 28 -11 Q26 -7 25 -5 Q25 -13 17 -13 Q-8 -19 -26 3Z",
+        ink,
+      );
+      if (female) fill("M20 -15 Q27 -18 29 -21 Q28 -16 24 -13Z", ink);
+      stroke("M4 14 Q18 12.5 24 2", outline, 0.85);
+      stroke("M-18 -14 Q-3 -23 13 -19", "rgba(150,84,69,.51)", 1);
+    }
+    ctx.translate(0, shut ? -23 : -22);
+    ctx.rotate(0.21);
+    const raise = expression === "bright" || expression === "laugh" ? -2.4 : 0;
+    fill(
+      `M-22 -.5 Q-16 -4 -4 ${-4 + raise} Q12 ${-5.3 + raise} 24 -1 Q13 -3 0 -1.8 Q-14 -.2 -21 1.7Z`,
+      brow,
     );
-    line("M15 124 Q20 128 16 130", "rgba(110,59,45,.38)", 0.75);
     ctx.restore();
   }
-  glow(0, 120.5, 9, 5, "rgba(255,219,177,.40)");
-  glow(0, 130, 13, 2.9, "rgba(114,61,46,.28)");
-  glow(0, 139, 4.5, 6.5, "rgba(107,54,42,.15)");
-  ctx.save();
-  ctx.translate(0, 150);
-  ctx.scale(s.mouth, male ? 0.78 : 1.0);
-  shape(
-    "M-27 -1 Q-17 -2 -7 -4.5 Q-3 -5.5 0 -3 Q3 -5.5 7 -4.5 Q18 -2 27 -1 Q17 2 0 2 Q-13 2 -27 -1Z",
-    "rgba(126,58,54,.77)",
-  );
-  shape(
-    "M-27 -1 Q-7 2 0 1 Q12 2 27 -1 Q17 6 4 7 Q-13 8 -27 -1Z",
-    "rgba(191,98,90,.64)",
-  );
-  line("M-27 -1 Q-17 0 -6 1 Q0 2 6 1 Q15 0 27 -1", "rgba(93,47,42,.87)", 0.94);
-  glow(0, 4.6, 13, 1.6, "rgba(255,193,164,.5)");
-  ctx.restore();
+  // The nose is mostly described by its profile, with two light, offset ink marks.
+  stroke("M-3.1 127 Q-2.4 129 -1.2 129.2", outline, 1.0);
+  stroke("M2.2 129.1 Q3.6 128.4 3.8 127.7", "#bf8271", 0.75);
+  ellipse(-1.1, 124.2, 1.6, 1.15, "rgba(255,226,204,.8)");
+  ctx.translate(0, 151);
+  ctx.scale(1.18, 1);
+  const open = ["bright", "laugh", "wink"].includes(expression);
+  if (open) {
+    const mouth =
+      "M-19 -3 Q-7 -.5 1 -.5 Q12 -1 19 -5 Q16 8 8 13 Q1 17 -6 12 Q-15 7 -19 -3Z";
+    fill(mouth, ink);
+    ctx.save();
+    ctx.clip(new Path2D(mouth));
+    fill(
+      "M-17 -4 Q-7 2 5 0 Q15 -1 20 -5 L16 1 Q7 6 -4 5 Q-14 3 -17 -4Z",
+      "#fff4e6",
+    );
+    ellipse(3.5, 13, 13, 6.7, "#cd7874");
+    ctx.restore();
+  } else {
+    const lift = expression === "smirk" ? -5.5 : -3.5;
+    stroke(`M-17 -1.9 Q-10 1.6 -2 2 Q8 2 17 ${lift}`, outline, 1.25);
+    stroke("M-5 6 Q.5 7 5 5.8", "rgba(247,178,156,.82)", 1.1);
+  }
   const texture = new T.CanvasTexture(canvas);
   texture.colorSpace = T.SRGBColorSpace;
   texture.anisotropy = 2;

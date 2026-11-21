@@ -6,7 +6,12 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { landmarks } from "../lib/content";
-import { initialAvatar } from "./avatar-data";
+import {
+  initialAvatar,
+  selectBase,
+  selectCollection,
+  type Collection,
+} from "./avatar-data";
 import { Crowns, Paving, type TreeData } from "./Planting";
 import Birds from "./BirdsongPark";
 import Avatar from "./Avatar";
@@ -301,8 +306,23 @@ function Sky() {
     </mesh>
   );
 }
-const pedestrianSkin = ["#895c43", "#f1c8a2", "#ba825e"];
-const pedestrianOutfit = ["#516987", "#b38b70", "#5d887a", "#c0af70"];
+// Use the same wardrobe and palette on both sides of the pedestrian detail transition.
+const pedestrians = (
+  [
+    ["indonesia", "Male", "#34415c", "#b39b80"],
+    ["afrika", "Female", "#f3e4cf", "#403044"],
+    ["australia", "Male", "#727254", "#ae9874"],
+    ["tiongkok", "Female", "#eee2d1", "#783e46"],
+    ["amerika", "Male", "#333751", "#af9479"],
+    ["australia", "Female", "#eee0d4", "#88a6ce"],
+  ] as const satisfies ReadonlyArray<
+    readonly [Collection, "Male" | "Female", string, string]
+  >
+).map(([collection, preset, top, bottom]) => ({
+  avatar: selectCollection(selectBase(initialAvatar, preset), collection),
+  top,
+  bottom,
+}));
 function DistantWalker({ i }: { i: number }) {
   const phase = useRef({ value: i });
   const geometry = useMemo(() => {
@@ -323,15 +343,39 @@ function DistantWalker({ i }: { i: number }) {
       g.setAttribute("color", new T.BufferAttribute(colors, 3));
       parts.push(g);
     }
-    const skin = pedestrianSkin[i % 3],
-      shirt = pedestrianOutfit[i % 4];
-    oval(0, 1.63, 0, 0.16, 0.2, 0.15, skin);
-    oval(0, 1.76, -0.015, 0.17, 0.12, 0.16, "#423731");
+    const { avatar, top: shirt, bottom } = pedestrians[i];
+    const { skin, hairColor = "#372c29" } = avatar;
+    const skirt =
+      avatar.preset === "Female" && avatar.collection !== "australia";
+    const shorts = avatar.collection === "australia";
+    oval(0, 1.67, 0, 0.16, 0.2, 0.15, skin);
+    oval(0, 1.79, -0.015, 0.17, 0.12, 0.16, hairColor);
+    if (avatar.preset === "Female") {
+      oval(
+        0,
+        avatar.hair === "Bun" ? 1.86 : 1.59,
+        -0.1,
+        0.14,
+        0.17,
+        0.095,
+        hairColor,
+      );
+    }
     oval(0, 1.18, 0, 0.25, 0.34, 0.16, shirt);
+    if (skirt) oval(0, 0.68, 0, 0.245, 0.34, 0.17, bottom);
     for (const side of [-1, 1]) {
       oval(side * 0.245, 1.18, 0, 0.08, 0.22, 0.08, shirt);
       oval(side * 0.25, 0.96, 0.015, 0.06, 0.13, 0.06, skin);
-      oval(side * 0.115, 0.52, 0, 0.105, 0.42, 0.115, "#414f54");
+      oval(
+        side * 0.115,
+        0.53,
+        0,
+        0.097,
+        0.42,
+        0.103,
+        shorts || skirt ? skin : bottom,
+      );
+      if (shorts) oval(side * 0.115, 0.72, 0, 0.12, 0.21, 0.13, bottom);
       oval(side * 0.115, 0.15, 0.055, 0.105, 0.085, 0.16, "#4c423b");
     }
     return mergeGeometries(parts);
@@ -372,16 +416,7 @@ function Pedestrian({ i }: { i: number }) {
   return (
     <group ref={g}>
       {near ? (
-        <Avatar
-          data={{
-            ...initialAvatar,
-            preset: i % 2 ? "Female" : "Male",
-            skin: pedestrianSkin[i % 3],
-            outfit: pedestrianOutfit[i % 4],
-            hair: ["Bob", "Curls", "Crop"][i % 3],
-          }}
-          speed={speed}
-        />
+        <Avatar data={pedestrians[i].avatar} speed={speed} />
       ) : (
         <DistantWalker i={i} />
       )}

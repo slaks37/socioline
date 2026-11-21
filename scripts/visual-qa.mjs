@@ -68,6 +68,7 @@ async function walk(key, until) {
 try {
   await page.goto(base + "/explore");
   await page.locator("canvas").waitFor();
+  await button("Detail").click();
   await button("Cokelat").click();
   await page.evaluate(() => document.fonts.ready);
   await shot("03-avatar");

@@ -1,5 +1,6 @@
 "use client";
 import Ambience from "./Ambience";
+import AvatarStudio from "./AvatarStudio";
 import CityReader, { ReadingLink, type Reading } from "./CityReader";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -11,25 +12,8 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import {
-  Compass,
-  ArrowRight,
-  RotateCw,
-  MapPin,
-  Pause,
-  Navigation,
-} from "lucide-react";
-import {
-  initialAvatar,
-  validAvatar,
-  hairStyles,
-  hairLabels,
-  faceDesigns,
-  defaultFace,
-  skinTones,
-  outfits,
-  type AvatarData,
-} from "./avatar-data";
+import { MapPin, Pause, Navigation } from "lucide-react";
+import { initialAvatar, validAvatar } from "./avatar-data";
 import type { Input, Location, Pose } from "./GameScene";
 import { interactives, districts, findPage } from "../lib/content";
 const World = dynamic(() => import("./GameScene"), { ssr: false });
@@ -139,8 +123,6 @@ export default function Explorer() {
   const [avatar, setAvatar] = useState(initialAvatar),
     [remember, setRemember] = useState(false),
     [playing, play] = useState(false),
-    [rotation, rotate] = useState(0.18),
-    [portrait, setPortrait] = useState(true),
     [supported, webgl] = useState<boolean | null>(null),
     [modal, open] = useState(""),
     [quality, qualitySet] = useState("Balanced");
@@ -241,13 +223,22 @@ export default function Explorer() {
     window.addEventListener("keydown", k);
     return () => window.removeEventListener("keydown", k);
   }, [playing, loc.id, modal, launch]);
-  const change = (v: Partial<AvatarData>) => setAvatar((a) => ({ ...a, ...v }));
   const save = () => {
     window.scrollTo(0, 0);
     try {
       if (remember) localStorage.setItem(key, JSON.stringify(avatar));
       else localStorage.removeItem(key);
     } catch {}
+    if (supported === false) {
+      const directory =
+        document.querySelector<HTMLDetailsElement>("#directory");
+      if (directory) {
+        directory.open = true;
+        directory.querySelector("summary")?.focus();
+        directory.scrollIntoView();
+      }
+      return;
+    }
     if (editing) {
       const resume = { ...pose.current };
       setTravel((t) => ({
@@ -330,19 +321,34 @@ export default function Explorer() {
             : "Pilih karakter untuk menjelajahi kota sebagai tamu."}
         </p>
       </div>
-      {supported === false ? (
-        <section className="offline">
-          <h2>Jelajahi dalam 2D</h2>
-          <p>
-            Browser ini belum dapat membuka tampilan 3D. Seluruh landmark
-            tersedia dalam direktori di bawah.
-          </p>
-        </section>
-      ) : !playing ? (
-        <div className="studio">
-          <div className="preview">
-            <span className="eyebrow">PRATINJAU KARAKTER</span>
-            {supported && (
+      {!playing ? (
+        <>
+          {supported === false && (
+            <section className="offline">
+              <h2>Jelajahi dalam 2D</h2>
+              <p>
+                Browser ini belum dapat menampilkan kota 3D.{" "}
+                <a href="#directory">Buka direktori kota 2D</a> untuk
+                mengunjungi landmark.
+              </p>
+            </section>
+          )}
+          <AvatarStudio
+            avatar={avatar}
+            update={setAvatar}
+            supported={supported}
+            editing={editing}
+            remember={remember}
+            onEnter={save}
+            onRemember={(value) => {
+              setRemember(value);
+              if (!value) {
+                try {
+                  localStorage.removeItem(key);
+                } catch {}
+              }
+            }}
+            renderPreview={(rotation, portrait) => (
               <Guard fail={fail}>
                 <Preview
                   avatar={avatar}
@@ -351,141 +357,8 @@ export default function Explorer() {
                 />
               </Guard>
             )}
-            <section className="studio-camera" aria-label="Kamera pratinjau">
-              <button
-                className="secondary"
-                onClick={() => setPortrait((p) => !p)}
-              >
-                {portrait ? "Lihat seluruh tubuh" : "Lihat wajah"}
-              </button>
-              <button
-                className="secondary"
-                onClick={() => rotate((r) => r + Math.PI / 4)}
-              >
-                <RotateCw size={15} /> Putar
-              </button>
-            </section>
-          </div>
-          <div className="options">
-            <fieldset>
-              <legend>Karakter awal</legend>
-              {(["Male", "Female"] as const).map((p) => (
-                <button
-                  key={p}
-                  aria-pressed={avatar.preset === p}
-                  onClick={() => change({ preset: p })}
-                >
-                  {p === "Male" ? "Laki-laki" : "Perempuan"}
-                </button>
-              ))}
-            </fieldset>
-            <fieldset>
-              <legend>Inspirasi wajah Nusantara</legend>
-              <div className="studio-choices">
-                {faceDesigns.map(({ id, label }) => (
-                  <button
-                    key={id}
-                    aria-pressed={(avatar.face ?? defaultFace) === id}
-                    onClick={() => change({ face: id })}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-            <fieldset>
-              <legend>Gaya rambut</legend>
-              <div className="studio-choices">
-                {hairStyles.map((h) => (
-                  <button
-                    key={h}
-                    aria-pressed={avatar.hair === h}
-                    onClick={() => change({ hair: h })}
-                  >
-                    {hairLabels[h]}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-            <fieldset>
-              <legend>Warna rambut</legend>
-              {["#372c29", "#714b34", "#c6a170", "#77776f"].map((color, i) => (
-                <button
-                  className="swatch"
-                  key={color}
-                  style={{ background: color }}
-                  aria-label={["Hitam", "Cokelat", "Pirang", "Abu-abu"][i]}
-                  aria-pressed={(avatar.hairColor ?? "#372c29") === color}
-                  onClick={() => change({ hairColor: color })}
-                />
-              ))}
-            </fieldset>
-            <fieldset>
-              <legend>Outfit</legend>
-              {(["Field jacket", "T-shirt"] as const).map((garment) => (
-                <button
-                  key={garment}
-                  aria-pressed={(avatar.garment ?? "Field jacket") === garment}
-                  onClick={() => change({ garment })}
-                >
-                  {garment}
-                </button>
-              ))}
-            </fieldset>
-            {(["skin", "outfit"] as const).map((k) => (
-              <fieldset key={k}>
-                <legend>
-                  {k === "skin" ? "Warna kulit" : "Warna pakaian"}
-                </legend>
-                {(k === "skin" ? skinTones : outfits).map((c, i) => (
-                  <button
-                    className="swatch"
-                    style={{ background: c }}
-                    aria-label={
-                      (k === "skin"
-                        ? ["Light", "Warm beige", "Tan", "Brown", "Deep brown"]
-                        : ["Teal", "Terracotta", "Indigo", "Ochre"])[i]
-                    }
-                    aria-pressed={avatar[k] === c}
-                    key={c}
-                    onClick={() => change({ [k]: c })}
-                  />
-                ))}
-              </fieldset>
-            ))}
-            <label>
-              Nama panggilan (opsional)
-              <input
-                maxLength={24}
-                value={avatar.name}
-                onChange={(e) => change({ name: e.target.value })}
-              />
-            </label>
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={remember}
-                onChange={(e) => {
-                  setRemember(e.target.checked);
-                  if (!e.target.checked)
-                    try {
-                      localStorage.removeItem(key);
-                    } catch {}
-                }}
-              />{" "}
-              Simpan avatar saya di perangkat ini
-            </label>
-            <button
-              className="button gold"
-              disabled={!supported}
-              onClick={save}
-            >
-              <Compass size={18} />
-              {editing ? "Lanjutkan menjelajah" : "Masuk ke Central Plaza"}
-              <ArrowRight size={16} />
-            </button>
-          </div>
-        </div>
+          />
+        </>
       ) : (
         <div className="game" ref={stage}>
           <Ambience enabled={sound} />
