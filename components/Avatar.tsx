@@ -32,12 +32,12 @@ export default function Avatar({
   const { collection, female, outfitIndex, skin } = resolveLook(data);
   const garment = getGarment(collection, female, outfitIndex);
   const pieces = useTailor(garment, female);
-  const maps = useCloth(garment, collection, female, outfitIndex);
+  const maps = useCloth(garment, collection, skin);
   const skirted = garment.bottom === "skirt" || garment.bottom === "dress";
   const shorts = garment.bottom === "shorts",
     sandals = garment.shoes === "sandals",
     flats = garment.shoes === "flats";
-  const shoulder = female ? 0.19 : 0.215;
+  const shoulder = female ? 0.164 : 0.192;
   const legs = useRef<(T.Group | null)[]>([]),
     knees = useRef<(T.Group | null)[]>([]),
     arms = useRef<(T.Group | null)[]>([]);
@@ -89,7 +89,16 @@ export default function Avatar({
       upperBody.current.rotation.y = 0.062 * stride * Math.cos(phaseAngle);
       upperBody.current.rotation.x = running ? 0.035 : 0.005;
     }
-    if (hips.current) hips.current.position.y = bounce;
+    const rest = (1 - stride) * (climbing || swimming || reading ? 0 : 1);
+    if (upperBody.current) {
+      upperBody.current.rotation.z += rest * 0.031;
+      upperBody.current.rotation.y += rest * 0.049;
+      upperBody.current.position.x = -0.018 * rest;
+    }
+    if (hips.current) {
+      hips.current.position.y = bounce;
+      hips.current.rotation.y = -0.045 * rest;
+    }
     for (let i = 0; i < 2; i++) {
       const direction = i === 0 ? -1 : 1;
       const leg = legs.current[i],
@@ -100,6 +109,11 @@ export default function Avatar({
         leg.rotation.x = climbing
           ? -0.35 + 0.42 * Math.sin(phaseAngle + i * Math.PI)
           : angle;
+      if (leg) {
+        leg.rotation.z = rest * (i === 0 ? -0.055 : 0.019);
+        leg.rotation.y = rest * direction * 0.12;
+        leg.rotation.x += rest * (i === 0 ? -0.075 : 0.028);
+      }
       if (knee) knee.rotation.x = Math.max(0, -angle) * (running ? 1.18 : 0.87);
       if (arm) {
         const aim = climbing
@@ -111,7 +125,14 @@ export default function Avatar({
               : -angle * 0.92 +
                 Math.sin(phaseAngle + i) * 0.025 -
                 (Math.abs(vertical?.current ?? 0) > 0.6 ? 0.26 : 0);
-        arm.rotation.x = T.MathUtils.damp(arm.rotation.x, aim, 12, dt);
+        arm.rotation.x = T.MathUtils.damp(
+          arm.rotation.x,
+          aim - rest * (i === 0 ? 0.13 : 0.035),
+          12,
+          dt,
+        );
+        arm.rotation.z = direction * (0.094 + rest * (i === 0 ? 0.012 : 0.048));
+        arm.rotation.y = direction * rest * 0.19;
       }
     }
     if (
@@ -147,7 +168,7 @@ export default function Avatar({
     >
       <group ref={swimRig}>
         <group ref={hips}>
-          <ClothMesh geometry={pieces.hips} color={garment.pants} />
+          <ClothMesh geometry={pieces.hips} map={maps.belt} />
           {([-1, 1] as const).map((side, i) => (
             <group
               key={side}
@@ -159,7 +180,7 @@ export default function Avatar({
               {!skirted && (
                 <ClothMesh
                   geometry={pieces.thigh}
-                  color={garment.pants}
+                  map={maps.trousers}
                   outline
                 />
               )}
@@ -189,14 +210,12 @@ export default function Avatar({
               >
                 <ClothMesh
                   geometry={shorts || skirted ? pieces.calf : pieces.shin}
-                  color={shorts || skirted ? skin : garment.pants}
+                  color={shorts || skirted ? skin : undefined}
+                  map={shorts || skirted ? undefined : maps.trousers}
                   outline={!skirted}
                 />
                 <group position={[0, -0.523, 0.012]} scale={[1, 1, 1]}>
-                  <ClothMesh
-                    geometry={pieces.shoe}
-                    color={sandals ? skin : flats ? "#ebd5b6" : "#ebe5e3"}
-                  />
+                  <ClothMesh geometry={pieces.shoe} map={maps.shoe} />
                   <ClothMesh
                     geometry={pieces.sole}
                     color={sandals ? "#a27754" : flats ? "#aa8060" : "#dcd4d6"}
@@ -301,7 +320,7 @@ export default function Avatar({
           {([-1, 1] as const).map((side, i) => (
             <group
               key={side}
-              position={[side * shoulder, 1.411, 0]}
+              position={[side * shoulder, 1.395, 0]}
               rotation-z={side * 0.076}
               ref={(el) => {
                 arms.current[i] = el;
@@ -311,7 +330,7 @@ export default function Avatar({
               {garment.sleeve !== "bare" && (
                 <ClothMesh geometry={pieces.sleeve} map={maps.sleeve} outline />
               )}
-              <group position={[0, -0.47, 0]} rotation-z={side * -0.075}>
+              <group position={[0, -0.47, 0.043]} rotation-z={side * -0.075}>
                 <Oval
                   p={[0, -0.041, 0.003]}
                   s={[0.037, 0.063, 0.026]}
@@ -324,15 +343,15 @@ export default function Avatar({
                   color={skin}
                   tilt={side * -0.3}
                 />
-                {[-1, 0, 1].map((finger) => (
+                {[-1.5, -0.5, 0.5, 1.5].map((finger) => (
                   <Oval
                     key={finger}
                     p={[
-                      side * finger * 0.016,
+                      side * finger * 0.014,
                       -0.083 + 0.005 * Math.abs(finger),
                       0.008,
                     ]}
-                    s={[0.011, 0.029, 0.013]}
+                    s={[0.0087, 0.032 - Math.abs(finger) * 0.003, 0.012]}
                     color={skin}
                   />
                 ))}

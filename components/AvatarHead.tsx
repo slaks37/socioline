@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useEffect } from "react";
 import * as T from "three";
+import { useLoader } from "@react-three/fiber";
 import { measure, resolveLook, type AvatarData } from "./avatar-data";
 import { faceGeometry, faceTexture } from "./avatar-face";
 import { hairGeometry } from "./avatar-hair";
@@ -26,6 +27,10 @@ export default function AvatarHead({ data }: { data: AvatarData }) {
     () => faceGeometry(female, faceIndex, jaw, nose),
     [female, faceIndex, jaw, nose],
   );
+  const [eyeArt, fiber] = useLoader(T.TextureLoader, [
+    `/avatar-materials/eye-${female ? "f" : "m"}.webp`,
+    "/avatar-materials/hair-fiber.webp",
+  ]);
   const paint = useMemo(
     () =>
       faceTexture(
@@ -37,8 +42,19 @@ export default function AvatarHead({ data }: { data: AvatarData }) {
         eyes,
         spacing,
         mouth,
+        eyeArt.image,
       ),
-    [collection, female, faceIndex, skin, hairColor, eyes, spacing, mouth],
+    [
+      collection,
+      female,
+      faceIndex,
+      skin,
+      hairColor,
+      eyes,
+      spacing,
+      mouth,
+      eyeArt,
+    ],
   );
   const hood =
     accessory === "Headscarf" || accessory === "Headwrap" || hair === "Hijab";
@@ -54,14 +70,27 @@ export default function AvatarHead({ data }: { data: AvatarData }) {
   useEffect(() => () => coiffure?.dispose(), [coiffure]);
   return (
     <group
-      position={[0, 1.705, 0.009]}
-      scale={[measure(data, "faceWidth"), 1, 1]}
+      position={[0, 1.687, 0.012]}
+      rotation={[-0.026, -0.055, 0.027]}
+      scale={[
+        measure(data, "faceWidth") * (female ? 0.76 : 0.78),
+        female ? 0.81 : 0.82,
+        0.8,
+      ]}
     >
       <mesh geometry={sculpt} scale={1.011}>
         <meshBasicMaterial color="#51323b" side={T.BackSide} />
       </mesh>
-      <mesh geometry={sculpt} castShadow>
-        <meshBasicMaterial vertexColors map={paint} toneMapped={false} />
+      <mesh geometry={sculpt} castShadow receiveShadow>
+        <meshLambertMaterial
+          vertexColors
+          map={paint}
+          color="#c4b9bd"
+          emissive="#ffffff"
+          emissiveMap={paint}
+          emissiveIntensity={0.48}
+          toneMapped={false}
+        />
       </mesh>
       {[-1, 1].map((side) => (
         <group
@@ -88,6 +117,7 @@ export default function AvatarHead({ data }: { data: AvatarData }) {
         <mesh geometry={coiffure} castShadow>
           <meshBasicMaterial
             vertexColors
+            map={fiber}
             side={T.DoubleSide}
             toneMapped={false}
           />

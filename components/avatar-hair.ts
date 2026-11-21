@@ -8,11 +8,12 @@ const ease = T.MathUtils.smoothstep;
 export function hairGeometry(style: string, color: string, female: boolean) {
   const pos: number[] = [],
     rgb: number[] = [],
+    uv: number[] = [],
     index: number[] = [];
   const base = new T.Color(color);
-  const dark = base.clone().lerp(new T.Color("#1b1327"), 0.62);
+  const dark = base.clone().lerp(new T.Color("#171020"), 0.77);
   const mid = base.clone().lerp(new T.Color("#67474a"), 0.13);
-  const light = base.clone().lerp(new T.Color("#d5a187"), 0.39);
+  const light = base.clone().lerp(new T.Color("#d9a089"), 0.51);
   const shade = new T.Color();
   function vertex(x: number, y: number, z: number, tone: number) {
     pos.push(x, y, z);
@@ -21,6 +22,9 @@ export function hairGeometry(style: string, color: string, female: boolean) {
     rgb.push(shade.r, shade.g, shade.b);
   }
   function stitch(start: number, rows: number, cols: number) {
+    for (let j = 0; j <= rows; j++) {
+      for (let i = 0; i <= cols; i++) uv.push(i / cols, 1 - j / rows);
+    }
     for (let j = 0; j < rows; j++)
       for (let i = 0; i < cols; i++) {
         const a = start + j * (cols + 1) + i,
@@ -53,7 +57,7 @@ export function hairGeometry(style: string, color: string, female: boolean) {
   ) {
     const path = new T.CatmullRomCurve3(points.map((p) => new T.Vector3(...p)));
     const rows = Math.max(12, (points.length - 1) * 5),
-      cols = 10,
+      cols = 16,
       start = pos.length / 3;
     for (let j = 0; j <= rows; j++) {
       const t = j / rows,
@@ -80,7 +84,16 @@ export function hairGeometry(style: string, color: string, female: boolean) {
           highlight *
           (Math.max(0, 1 - Math.abs(t - 0.38 + s * 0.09) * 4.6) * 0.23 +
             0.15 * Math.max(0, 1 - Math.abs(s + 0.42) * 3));
-        const tone = c <= 0 ? 0.07 : 0.2 + 0.39 * c + glint;
+        const strand = Math.cos(11 * s + 1.5 * t);
+        const highlightBand = Math.max(0, 1 - Math.abs(t - 0.4 + 0.1 * s) * 9);
+        const tone =
+          c <= 0
+            ? 0.035
+            : 0.1 +
+              0.39 * c +
+              glint +
+              0.065 * strand * c +
+              0.22 * highlightBand * c;
         vertex(pt.x, pt.y, pt.z, tone);
       }
     }
@@ -97,11 +110,14 @@ export function hairGeometry(style: string, color: string, female: boolean) {
           rear = ease(Math.abs(a), 1.28, 2.7);
         const edge =
           (buzz || coiled || braided || tied ? 1.02 : 1.1) +
-          0.81 * side +
+          (tousled ? 0.48 : 0.81) * side +
           0.37 * rear +
           0.024 * Math.cos(9 * a);
         const p = t * edge;
-        const [x, y, z] = scalp(a, p, buzz ? -0.002 : 0);
+        // The skull is broader above the temples and occiput than a sphere.
+        // Keep the inner cap outside the cranium without lifting the fringe.
+        const clearance = (0.012 + 0.008 * rear) * Math.sin(p) ** 2;
+        const [x, y, z] = scalp(a, p, clearance);
         const channel =
           a * (braided ? 33 : 20) + (1 - t) ** 2 * (sidePart ? 5.5 : 3.1);
         const lines = Math.cos(channel),
@@ -131,7 +147,7 @@ export function hairGeometry(style: string, color: string, female: boolean) {
         0.155 +
         0.022 * Math.sin(Math.PI * t) +
         tail * (0.045 + 0.036 * Math.sin(t * 10.6 + a * 0.6));
-      const drop = 0.36 + 0.04 * Math.cos(a * 3.4) + 0.018 * Math.cos(a * 8.3);
+      const drop = 0.49 + 0.06 * Math.cos(a * 3.4) + 0.018 * Math.cos(a * 8.3);
       return [
         Math.sin(sweep) * (r + layer),
         0.127 - (0.127 + drop) * t,
@@ -156,8 +172,8 @@ export function hairGeometry(style: string, color: string, female: boolean) {
         );
       }
     stitch(start, rows, cols);
-    for (let i = 0; i < 16; i++) {
-      const a = 0.98 + (i / 15) * (tau - 1.96);
+    for (let i = 0; i < 23; i++) {
+      const a = 0.98 + (i / 22) * (tau - 1.96);
       const pts: Point[] = Array.from({ length: 10 }, (_, j) => {
         const t = j / 9;
         const p = wavePoint(a + 0.085 * Math.sin(t * 8.6 + i * 0.34), t, 0.012);
@@ -166,12 +182,27 @@ export function hairGeometry(style: string, color: string, female: boolean) {
       });
       ribbon(
         pts,
-        0.034 + (0.5 + 0.5 * Math.cos(i * 3)) * 0.008,
+        0.024 + (0.5 + 0.5 * Math.cos(i * 3)) * 0.008,
         0.012,
         0.21 * Math.sin(i),
         1,
         0.95,
       );
+    }
+    // A continuous outer layer bridges the crown to the long waves down the back.
+    for (let i = 0; i < 21; i++) {
+      const a = 1.18 + ((tau - 2.36) * i) / 20;
+      const pts: Point[] = [
+        scalp(a - 0.22, 0.3, 0.009),
+        scalp(a - 0.15, 0.69, 0.013),
+        scalp(a - 0.07, 1.05, 0.021),
+        scalp(a, 1.3, 0.024),
+      ];
+      for (let j = 0; j <= 6; j++) {
+        const t = 0.22 + (j * (0.39 + 0.1 * Math.sin(i * 4.19))) / 6;
+        pts.push(wavePoint(a + 0.034 * Math.sin(t * 7 + i), t, 0.021));
+      }
+      ribbon(pts, 0.023, 0.007, 0.11 * Math.sin(a), 1, 0.65);
     }
     // The two front locks turn towards the chest, then turn out and back at their tips.
     for (const side of [-1, 1]) {
@@ -186,6 +217,8 @@ export function hairGeometry(style: string, color: string, female: boolean) {
           [side * 0.221, -0.279, 0.116],
           [side * 0.182, -0.338, 0.134],
           [side * 0.191, -0.39, 0.147],
+          [side * 0.211, -0.46, 0.152],
+          [side * 0.193, -0.505, 0.149],
         ],
         0.034,
         0.013,
@@ -207,6 +240,49 @@ export function hairGeometry(style: string, color: string, female: boolean) {
         0.01,
         -side * 0.2,
         1,
+      );
+    }
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 4; i++) {
+        const dx = i * 0.009,
+          dy = i * 0.008;
+        ribbon(
+          [
+            [side * (0.042 + dx), 0.219 - dy, 0.073],
+            [side * (0.104 + dx), 0.172 - dy, 0.148],
+            [side * (0.145 + dx), 0.101 - dy, 0.147],
+            [side * (0.157 + dx), 0.034 - dy, 0.134],
+            [side * (0.141 + dx), -0.036 - dy, 0.145],
+            [side * (0.157 + dx), -0.115 - dy, 0.167],
+            [side * (0.203 + dx), -0.166 - dy, 0.152],
+            [side * (0.2 + dx), -0.225 - dy, 0.14],
+            [side * (0.179 + dx), -0.254 - dy, 0.152],
+          ],
+          0.01,
+          0.005,
+          side * 0.18,
+          1.1,
+        );
+      }
+    }
+    // Loose, tapered strands overlap the forehead at different lengths,
+    // carrying the part down into the two face-framing locks.
+    for (let i = 0; i < 5; i++) {
+      const spread = 0.012 * i;
+      ribbon(
+        [
+          [0.047 + spread * 0.4, 0.211, 0.067],
+          [0.015 + spread, 0.191, 0.131],
+          [-0.043 - spread * 0.28, 0.152, 0.168],
+          [-0.09 - spread * 0.6, 0.111, 0.166],
+          [-0.104 - spread * 0.7, 0.057 + spread * 0.36, 0.151],
+          [-0.097 - spread, 0.025 + spread * 0.48, 0.15],
+        ],
+        0.015 + i * 0.0015,
+        0.006,
+        -0.22,
+        1.12,
+        0.7,
       );
     }
     // Asymmetrical curtain fringe sweeping away from the face from one part.
@@ -247,9 +323,98 @@ export function hairGeometry(style: string, color: string, female: boolean) {
       0.22,
     );
   }
-  if (bob || tousled || sidePart || (tied && !braided)) {
+  if (tousled) {
+    // Feathered nape beneath shorter crown layers; flick individual tips away
+    // from the ears so a short cut reads correctly in profile.
+    for (let layer = 0; layer < 2; layer++) {
+      const count = layer ? 19 : 23;
+      for (let i = 0; i < count; i++) {
+        const a = tau * ((i + layer * 0.45) / count - 0.5);
+        const side = ease(Math.abs(a), 0.64, 1.52);
+        const rear = ease(Math.abs(a), 1.4, 2.8);
+        const noise = Math.sin(i * 6.81 + layer * 2.3);
+        const end =
+          1.25 + 0.45 * side + 0.37 * rear - 0.31 * layer + 0.14 * noise;
+        const pts: Point[] = [];
+        for (let j = 0; j <= 8; j++) {
+          const t = j / 8,
+            fan = Math.sin(Math.PI * t),
+            tip = ease(t, 0.68, 1);
+          const sweep = (a < 0.21 ? -1 : 1) * (0.28 + 0.13 * noise);
+          const az = a - sweep * (1 - t) + 0.18 * fan + sweep * tip;
+          const p = 0.22 + (end - 0.22) * t;
+          const pt = scalp(az, p, 0.003 + (0.016 + 0.014 * layer) * fan);
+          const lift = (0.018 + 0.014 * layer) * side * tip;
+          pt[0] += Math.sin(az) * lift;
+          pt[1] += (0.016 + 0.019 * layer) * fan + lift * (0.6 + noise);
+          pt[2] += Math.cos(az) * lift;
+          pts.push(pt);
+        }
+        ribbon(
+          pts,
+          layer ? 0.032 : 0.036,
+          0.009 + layer * 0.002,
+          noise * 0.21,
+          1,
+          0.57,
+        );
+      }
+    }
+    // Distinct locks fall from the broken centre part across the hairline.
+    const tips = [-0.16, -0.115, -0.075, -0.032, 0.019, 0.081, 0.133];
+    tips.forEach((tip, i) => {
+      const side = i < 4 ? -1 : 1,
+        start = 0.023 + (i - 3) * 0.012;
+      const y = [0.048, 0.063, 0.015, 0.045, 0.091, 0.058, 0.067][i];
+      ribbon(
+        [
+          [start, 0.211, 0.068],
+          [start - side * 0.018, 0.211, 0.116],
+          [tip * 0.58, 0.166, 0.159],
+          [tip, 0.111, 0.168 - Math.abs(tip) * 0.19],
+          [tip + side * 0.027, y, 0.196 - Math.abs(tip) * 0.25],
+        ],
+        0.024 + Math.abs(Math.sin(i)) * 0.01,
+        0.01,
+        side * 0.19,
+        1,
+      );
+    });
+    for (const side of [-1, 1]) {
+      for (let k = 0; k < 3; k++) {
+        const y = 0.041 + k * 0.046;
+        ribbon(
+          [
+            [side * 0.106, y + 0.08, -0.072],
+            [side * 0.161, y + 0.043, -0.077],
+            [side * 0.193, y, -0.062],
+            [side * (0.224 + k * 0.009), y + 0.024, -0.07],
+          ],
+          0.031,
+          0.01,
+          side * 0.3,
+          1.17,
+        );
+      }
+    }
+    for (let i = 0; i < 3; i++) {
+      const shift = i * 0.014;
+      ribbon(
+        [
+          [-0.083 + shift, 0.185, -0.035],
+          [-0.055 + shift, 0.242, -0.027],
+          [0.003 + shift, 0.264 - i * 0.008, -0.009],
+          [0.055 + shift, 0.234 - i * 0.006, 0.036],
+        ],
+        0.012 + i * 0.004,
+        0.006,
+        0.23,
+      );
+    }
+  }
+  if (bob || sidePart || (tied && !braided)) {
     // Sweep the part across the crown; points on both sides converge on separate tips.
-    const count = tousled ? 15 : 20;
+    const count = 20;
     for (let i = 0; i < count; i++) {
       const a = -Math.PI + (tau * (i + 0.5)) / count,
         abs = Math.abs(a);
@@ -258,15 +423,10 @@ export function hairGeometry(style: string, color: string, female: boolean) {
       const sweep = sidePart ? 0.57 : tied ? 0.63 : 0.41;
       const wave = Math.sin(i * 4.13);
       const end =
-        (tied ? 0.91 : 1.37) +
-        0.75 * perimeter +
-        0.31 * back +
-        (tousled ? 0.11 : 0.045) * wave;
+        (tied ? 0.91 : 1.37) + 0.75 * perimeter + 0.31 * back + 0.045 * wave;
       const drift =
         (sidePart ? -0.54 : Math.sin(a + 0.45) * -0.35) + 0.07 * wave;
-      const length = tied
-        ? 0
-        : (long ? 0.4 : bob ? 0.13 : tousled ? 0.045 : 0.04) * perimeter;
+      const length = tied ? 0 : (bob ? 0.13 : 0.04) * perimeter;
       const points: Point[] = [];
       for (let k = 0; k <= 6; k++) {
         const t = k / 6,
@@ -278,7 +438,7 @@ export function hairGeometry(style: string, color: string, female: boolean) {
           0.005 + 0.012 * Math.sin(Math.PI * t),
         );
         const tail = ease(t, 0.55, 1),
-          endFlip = (tousled ? 0.042 : long ? 0.032 : 0.015) * tail;
+          endFlip = 0.015 * tail;
         points.push([
           x +
             Math.sin(a) *
@@ -287,13 +447,7 @@ export function hairGeometry(style: string, color: string, female: boolean) {
           z + Math.cos(a) * endFlip - (long ? 0.035 * back * tail : 0),
         ]);
       }
-      ribbon(
-        points,
-        tied ? 0.021 : tousled ? 0.046 : 0.041,
-        tousled ? 0.015 : 0.011,
-        ((i % 3) - 1) * 0.13,
-        1,
-      );
+      ribbon(points, tied ? 0.021 : 0.041, 0.011, ((i % 3) - 1) * 0.13, 1);
     }
     if (!tied) {
       // Layered face-framing bangs. The sloping tips leave both pupils uncovered.
@@ -331,71 +485,11 @@ export function hairGeometry(style: string, color: string, female: boolean) {
         const delta = sidePart ? 0.024 : 0;
         const path: Point[] = points.map(([x, y, z], j) => [
           x + delta * (1 - j / 4),
-          y + (tousled ? 0.012 * Math.sin(j + i) : 0),
+          y,
           z + 0.005,
         ]);
         ribbon(path, i === 0 ? 0.047 : 0.037, 0.012, i % 2 ? 0.12 : -0.1, 1);
       });
-      if (tied && !braided) {
-        ribbon(
-          [
-            [0.015, 0.22, 0.045],
-            [-0.042, 0.205, 0.111],
-            [-0.121, 0.139, 0.149],
-            [-0.163, 0.065, 0.123],
-            [-0.138, 0.006, 0.124],
-          ],
-          0.03,
-          0.011,
-          -0.2,
-        );
-        ribbon(
-          [
-            [0.016, 0.22, 0.03],
-            [0.078, 0.196, 0.1],
-            [0.142, 0.123, 0.13],
-            [0.171, 0.042, 0.104],
-            [0.154, -0.021, 0.1],
-          ],
-          0.028,
-          0.012,
-          0.2,
-        );
-      }
-      if (tousled) {
-        // Flyaways break the silhouette at the part and temples.
-        ribbon(
-          [
-            [-0.04, 0.18, 0.025],
-            [0.012, 0.248, -0.005],
-            [0.059, 0.243, -0.05],
-            [0.084, 0.208, -0.04],
-          ],
-          0.02,
-          0.008,
-        );
-        for (const side of [-1, 1]) {
-          ribbon(
-            [
-              [side * 0.092, 0.171, -0.06],
-              [side * 0.167, 0.125, -0.054],
-              [side * 0.205, 0.105, -0.089],
-              [side * 0.212, 0.132, -0.11],
-            ],
-            0.029,
-            0.012,
-          );
-          ribbon(
-            [
-              [side * 0.116, 0.1, -0.108],
-              [side * 0.176, 0.051, -0.102],
-              [side * 0.207, 0.015, -0.125],
-            ],
-            0.027,
-            0.012,
-          );
-        }
-      }
     }
   }
   function coilShell() {
@@ -524,6 +618,7 @@ export function hairGeometry(style: string, color: string, female: boolean) {
   const geometry = new T.BufferGeometry();
   geometry.setAttribute("position", new T.Float32BufferAttribute(pos, 3));
   geometry.setAttribute("color", new T.Float32BufferAttribute(rgb, 3));
+  geometry.setAttribute("uv", new T.Float32BufferAttribute(uv, 2));
   geometry.setIndex(index);
   geometry.computeVertexNormals();
   return geometry;

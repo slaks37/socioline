@@ -484,8 +484,8 @@ function StudioCamera({
 }) {
   const { camera, size } = useThree();
   useEffect(() => {
-    const targetY = (portrait ? 1.61 : 1.0) * heightScale;
-    const height = (portrait ? 0.91 : 2.24) * Math.max(1, heightScale);
+    const targetY = (portrait ? 1.615 : 0.96) * heightScale;
+    const height = (portrait ? 0.71 : 2.12) * Math.max(1, heightScale);
     const width = portrait ? 0.72 : 0.9;
     const aperture = Math.tan(T.MathUtils.degToRad(16));
     const distance =
@@ -505,13 +505,31 @@ export function Preview({
   portrait: boolean;
 }) {
   return (
-    <Canvas camera={{ position: [0, 1.65, 2], fov: 32 }} dpr={[1, 1.6]}>
+    <Canvas
+      shadows={{ type: T.PCFShadowMap }}
+      camera={{ position: [0, 1.65, 2], fov: 32 }}
+      dpr={[1, 2]}
+    >
       <StudioCamera
         portrait={portrait}
         heightScale={measure(avatar, "height")}
       />
       <hemisphereLight args={["#fff5e7", "#c3d4dc", 1.45]} />
-      <directionalLight position={[-3, 4, 5]} intensity={1.8} color="#fff0df" />
+      <directionalLight
+        position={[-2.4, 4.2, 3.6]}
+        intensity={2.1}
+        color="#fff3e9"
+        castShadow
+        shadow-mapSize={[512, 512]}
+        shadow-camera-left={-1.1}
+        shadow-camera-right={1.1}
+        shadow-camera-top={2.2}
+        shadow-camera-bottom={-0.25}
+        shadow-camera-near={0.2}
+        shadow-camera-far={9}
+        shadow-normalBias={0.004}
+        shadow-bias={-0.0002}
+      />
       <directionalLight
         position={[2, 2, -3]}
         intensity={1.65}

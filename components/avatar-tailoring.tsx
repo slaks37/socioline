@@ -14,10 +14,14 @@ function shade(geometry: T.BufferGeometry) {
   for (let i = 0; i < n.count; i++) {
     const light = n.getY(i) * 0.45 + n.getZ(i) * 0.42 - n.getX(i) * 0.38;
     const value =
-      0.66 +
-      0.32 * T.MathUtils.smoothstep(light, -0.55, 0.08) +
-      0.08 * T.MathUtils.smoothstep(light, 0.48, 0.7);
-    colors.push(value, value * 0.985, value * 0.985);
+      0.42 +
+      0.4 * T.MathUtils.smoothstep(light, -0.5, 0.16) +
+      0.2 * T.MathUtils.smoothstep(light, 0.23, 0.62);
+    colors.push(
+      value,
+      value * (0.93 + 0.07 * value),
+      value * (0.97 + 0.03 * value),
+    );
   }
   geometry.setAttribute("color", new T.Float32BufferAttribute(colors, 3));
   return geometry;
@@ -26,7 +30,7 @@ function cut(rings: Ring[], pleats = 0, depth = 0) {
   const positions: number[] = [],
     uv: number[] = [],
     indices: number[] = [];
-  const segments = 48;
+  const segments = pleats > 6 ? 84 : 48;
   const first = rings[0][0],
     span = rings[rings.length - 1][0] - first;
   for (const [row, [y, w, d, oz = 0]] of rings.entries()) {
@@ -57,7 +61,7 @@ function cut(rings: Ring[], pleats = 0, depth = 0) {
 }
 const sphere = shade(new T.SphereGeometry(1, 20, 15));
 export const uprightNeck = cut([
-  [0.134, 0.047, 0.052],
+  [0.161, 0.047, 0.052],
   [0.108, 0.058, 0.061],
   [0.056, 0.06, 0.059],
   [0.027, 0.072, 0.064],
@@ -75,8 +79,22 @@ export function Oval({
   tilt?: number;
 }) {
   return (
-    <mesh position={p} scale={s} rotation-z={tilt} geometry={sphere} castShadow>
-      <meshBasicMaterial color={color} vertexColors toneMapped={false} />
+    <mesh
+      position={p}
+      scale={s}
+      rotation-z={tilt}
+      geometry={sphere}
+      castShadow
+      receiveShadow
+    >
+      <meshStandardMaterial
+        color={color}
+        vertexColors
+        roughness={0.88}
+        emissive={color}
+        emissiveIntensity={0.18}
+        toneMapped={false}
+      />
     </mesh>
   );
 }
@@ -102,12 +120,17 @@ export function ClothMesh({
           />
         </mesh>
       )}
-      <mesh geometry={geometry} castShadow>
-        <meshBasicMaterial
+      <mesh geometry={geometry} castShadow receiveShadow>
+        <meshStandardMaterial
+          roughness={0.9}
+          emissive={color}
+          emissiveMap={map ?? null}
+          emissiveIntensity={0.12}
+          toneMapped={false}
+          key={map ? "printed" : "solid"}
           map={map || null}
           color={color}
           vertexColors
-          toneMapped={false}
         />
       </mesh>
     </>
@@ -143,9 +166,9 @@ export function useTailor(g: Garment, female: boolean) {
       [1.036, hips * 0.93, 0.109],
       [1.008, hips, 0.123],
       [0.969, hips * 1.08, 0.13],
-      [0.915, hips * 1.04, 0.119],
-      [0.874, hips * 0.84, 0.104],
-      [0.862, 0.09, 0.083],
+      [0.915, hips * 1.04, 0.103],
+      [0.874, hips * 0.84, 0.074],
+      [0.862, 0.09, 0.04],
     ]);
     const legRadius = female ? 0.083 : 0.094;
     const thigh = cut(
@@ -200,11 +223,11 @@ export function useTailor(g: Garment, female: boolean) {
       [0.02, armWidth * 0.85, 0.074],
       [0, armWidth, 0.076],
       [-0.073, armWidth * 0.93, 0.07],
-      [-0.163, armWidth * 0.76, 0.058],
-      [-0.253, armWidth * 0.67, 0.049],
-      [-0.318, armWidth * 0.76, 0.054],
-      [-0.405, armWidth * 0.59, 0.045],
-      [-0.48, armWidth * 0.42, 0.039],
+      [-0.163, armWidth * 0.82, 0.06, -0.009],
+      [-0.253, armWidth * 0.66, 0.049, -0.013],
+      [-0.314, armWidth * 0.78, 0.057, 0.001],
+      [-0.405, armWidth * 0.55, 0.042, 0.026],
+      [-0.48, armWidth * 0.42, 0.033, 0.045],
     ]);
     const length = (
       { short: 0.196, roll: 0.32, long: 0.464, puff: 0.245, bare: 0.0 } as const
@@ -218,8 +241,19 @@ export function useTailor(g: Garment, female: boolean) {
       [-0.049, w * 1.05, puff ? 0.099 : 0.089],
       [-length * 0.56, w * (puff ? 1.28 : 0.93), puff ? 0.109 : 0.08],
       [-length * 0.79, w * (puff ? 1.24 : 0.86), puff ? 0.1 : 0.072],
-      [-length + 0.022, w * (puff ? 0.8 : 0.82), 0.068],
-      [-length, w * (puff ? 0.66 : 0.81), 0.064],
+      [
+        -length + 0.038,
+        w * (puff ? 0.78 : 0.76),
+        0.061,
+        length > 0.4 ? 0.028 : 0,
+      ],
+      [
+        -length + 0.029,
+        w * (puff ? 0.72 : 0.9),
+        0.073,
+        length > 0.4 ? 0.033 : 0,
+      ],
+      [-length, w * (puff ? 0.67 : 0.84), 0.064, length > 0.4 ? 0.042 : 0],
     ]);
     const skirtLength = g.waist === "plaid" ? 0.475 : 0.84;
     const skirt = cut(
@@ -233,7 +267,7 @@ export function useTailor(g: Garment, female: boolean) {
         ];
       }),
       12,
-      0.034,
+      0.072,
     );
     const shoe = cut(
       [
@@ -378,13 +412,13 @@ export function Carry({ bag }: { bag: Garment["bag"] }) {
         ]}
       />
       <Oval
-        p={[0.213, 0.927, 0.014]}
+        p={[0.22, 0.936, -0.066]}
         s={[0.039, 0.127, 0.117]}
         color={color}
         tilt={-0.055}
       />
       <Trim
-        p={[0.244, 0.973, 0.018]}
+        p={[0.251, 0.982, -0.062]}
         s={[0.007, 0.013, 0.176]}
         color={straw ? "#9f7844" : sling ? "#9b8479" : "#bc9f83"}
       />

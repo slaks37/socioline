@@ -112,7 +112,7 @@ export default function AvatarStudio({
 }) {
   const [panel, setPanel] = useState<(typeof panels)[number]>("Wajah");
   const [view, setView] = useState<"model" | "reference">("model");
-  const [rotation, rotate] = useState(0.13);
+  const [rotation, rotate] = useState(0.24);
   const [portrait, zoom] = useState(false);
   const look = resolveLook(avatar);
   const { collection, female } = look;

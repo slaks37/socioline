@@ -303,7 +303,7 @@ export default function HeadAccessory({
         </group>
       )}
       {accessory === "Flower" && (
-        <group position={[0.155, 0.102, 0.109]} rotation={[0.1, 0.45, 0.34]}>
+        <group position={[0.146, 0.094, 0.168]} rotation={[0.1, 0.45, 0.34]}>
           {Array.from({ length: 5 }, (_, i) => (
             <group key={i} rotation-z={(tau * i) / 5}>
               <Oval
@@ -321,7 +321,7 @@ export default function HeadAccessory({
         </group>
       )}
       {(accessory === "Gold pins" || accessory === "Hair clips") && (
-        <group position={[0.14, 0.078, 0.131]} rotation-y={0.4}>
+        <group position={[0.145, 0.079, 0.166]} rotation-y={0.4}>
           {[0, 1].map((i) => (
             <Trim
               key={i}
