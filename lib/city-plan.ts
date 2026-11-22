@@ -138,7 +138,35 @@ export function cityParts() {
     box(x, height + 0.1, z, w + 0.76, 0.26, d + 0.72, "#d8c3a3");
     box(x, height + 0.26, z, w - 0.24, 0.08, d - 0.24, "#c9ad87");
     if (l.id === "collaboration-center") {
-      box(x - w / 2 + 0.34, height + 0.2, z - 2.33, 0.99, 0.2, 1.6, "#c8a783");
+      // Wrap the landing behind the roof so walking straight past the last
+      // tread still leaves room to turn onto the terrace at either speed.
+      const left = x - w / 2 - 1.74,
+        right = x + w / 2 + 0.38;
+      const back = z - d / 2 - 2,
+        front = z - d / 2 + 0.29;
+      const middle = (left + right) / 2;
+      box(
+        middle,
+        height + 0.2,
+        (back + front) / 2,
+        right - left,
+        0.2,
+        front - back,
+        "#c8a783",
+      );
+      box(middle, height + 0.68, back, right - left, 0.76, 0.12, "#95735b");
+      for (const side of [left, right]) {
+        box(
+          side,
+          height + 0.68,
+          (back + front) / 2,
+          0.12,
+          0.76,
+          front - back,
+          "#95735b",
+        );
+        box(side, height / 2, back + 0.15, 0.22, height + 0.2, 0.22, "#91654b");
+      }
       const stairs = 19;
       for (let step = 0; step < stairs; step++) {
         const rise = 0.23 + ((height + 0.07) * step) / (stairs - 1);

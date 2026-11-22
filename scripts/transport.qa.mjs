@@ -49,29 +49,59 @@ import assert from "node:assert/strict";
         parseFloat(document.querySelector(".mini").title.split(" ")[1]) > 3.85,
     );
     console.log("Discovery staircase walked", await height());
-    await travel("Tangga atap koperasi");
-    await page.waitForFunction(() =>
-      document
-        .querySelector(".mini")
-        .getAttribute("aria-label")
-        .includes("31, 30"),
-    );
-    await move(
-      "w",
-      () =>
-        parseFloat(document.querySelector(".mini").title.split(" ")[1]) > 3.68,
-    );
-    await move(
-      "d",
-      () =>
-        parseFloat(
-          document
-            .querySelector(".mini")
-            .getAttribute("aria-label")
-            .split("position ")[1],
-        ) >= 33,
-    );
-    assert((await height()) > 3.5);
+    for (const running of [false, true]) {
+      await travel("Tangga atap koperasi");
+      await page.waitForFunction(() =>
+        document
+          .querySelector(".mini")
+          .getAttribute("aria-label")
+          .includes("31, 30"),
+      );
+      if (running) await page.keyboard.down("Shift");
+      try {
+        await move(
+          "w",
+          () =>
+            parseFloat(document.querySelector(".mini").title.split(" ")[1]) >
+            3.68,
+        );
+        // Run up to the back rail before turning, as well as turning on the last tread.
+        if (running) {
+          await move(
+            "w",
+            () =>
+              Number(
+                document
+                  .querySelector(".mini")
+                  .getAttribute("aria-label")
+                  .split(", ")
+                  .at(-1),
+              ) <= 21,
+          );
+        }
+        await move(
+          "d",
+          () =>
+            parseFloat(
+              document
+                .querySelector(".mini")
+                .getAttribute("aria-label")
+                .split("position ")[1],
+            ) >= 33,
+        );
+      } finally {
+        if (running) await page.keyboard.up("Shift");
+      }
+      await page.waitForTimeout(350);
+      assert(
+        (await height()) > 3.5,
+        "Avatar must stay on the roof after turning",
+      );
+      console.log(
+        running ? "Ran onto the roof" : "Walked onto the roof",
+        await height(),
+      );
+    }
     await travel("Tangga panjat studio");
     await btn("Panjat ke atap").click();
     await page.waitForFunction(
