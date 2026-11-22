@@ -13,6 +13,7 @@ import {
   type Collection,
 } from "./avatar-data";
 import { Crowns, Paving, type TreeData } from "./Planting";
+import { rand, streetTrees } from "../lib/streets";
 import Birds from "./BirdsongPark";
 import Avatar from "./Avatar";
 export const heroSites = [
@@ -108,10 +109,6 @@ function Reflection() {
   }, [gl, scene]);
   return null;
 }
-const rand = (i: number) => {
-  const v = Math.sin(i * 127.1 + 73.5) * 43758.5453;
-  return v - Math.floor(v);
-};
 function Hills() {
   const geo = useMemo(() => {
     const g = new T.PlaneGeometry(800, 800, 72, 72);
@@ -211,24 +208,7 @@ function Scenery({ low }: { low: boolean }) {
       trees.push({ x, z, h });
     }
 
-    for (let i = 0; i < (low ? 170 : 390); i++) {
-      const x = (rand(i + 5) - 0.5) * 260,
-        z = (rand(i + 430) - 0.5) * 225;
-      if (x < -77 && z > -72 && z < 58) continue;
-      if (Math.abs(x) > 76 || z < -69 || z > 49)
-        tree(x, z, i, 4 + rand(i + 200) * 6);
-    }
-    for (let i = 0; i < 28; i++) {
-      for (const z of [5, 44])
-        if (Math.abs(i * 5 - 68) > 6)
-          tree(i * 5 - 68, z, i + 90, 4 + rand(i) * 2.8);
-    }
-    for (let j = 0; j < landmarks.length; j++) {
-      const l = landmarks[j];
-      if (l.kind < 5) tree(l.x + 5.5, l.z + 3.5, 400 + j, 3.8 + rand(j) * 2.8);
-    }
-    for (const x of [-54, 54])
-      for (let j = 0; j < 5; j++) tree(x - 8, 13 + j * 4, j, 5 + rand(j) * 1.8);
+    for (const t of streetTrees(low)) tree(t.x, t.z, 0, t.h);
     for (let i = 0; i < 64; i++) {
       const a = (tau * i) / 64,
         r = 102 + rand(i + 102) * 43,

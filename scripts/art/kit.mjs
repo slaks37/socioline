@@ -148,7 +148,7 @@ export function kit() {
         [0, 2, 6, 4],
         [1, 5, 7, 3],
       ])
-        ind.push(j + a, j + b, j + c, j + a, j + c, j + d);
+        ind.push(j + a, j + c, j + b, j + a, j + d, j + c);
     }
     geo.setAttribute("position", new T.Float32BufferAttribute(v, 3));
     geo.setIndex(ind);

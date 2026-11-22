@@ -29,6 +29,7 @@ const position = z.object({
   x: z.number().min(-152).max(84),
   z: z.number().min(-74).max(60),
   y: z.number().min(-6).max(55),
+  ride: z.enum(["motor", "mobil", "helikopter"]).optional(),
   facing: z.number().finite().min(-10000).max(10000),
 });
 function answer(body: unknown, status = 200) {

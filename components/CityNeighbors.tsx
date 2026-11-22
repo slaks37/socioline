@@ -2,6 +2,8 @@
 import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as T from "three";
+import { Vehicle } from "./Transport";
+import { measure } from "./avatar-data";
 import Avatar from "./Avatar";
 import type { Neighbor } from "./useCitySession";
 export default function CityNeighbor({ peer }: { peer: Neighbor }) {
@@ -29,7 +31,23 @@ export default function CityNeighbor({ peer }: { peer: Neighbor }) {
   });
   return (
     <group ref={group}>
-      <Avatar data={peer.avatar} speed={speed} />
+      {peer.pose.ride && <Vehicle id={peer.pose.ride} active />}
+      {peer.pose.ride !== "helikopter" && (
+        <group
+          scale={
+            peer.pose.ride === "mobil"
+              ? 0.85 / measure(peer.avatar, "height")
+              : 1
+          }
+          position={[
+            peer.pose.ride === "mobil" ? -0.33 : 0,
+            peer.pose.ride === "mobil" ? -0.24 : peer.pose.ride ? -0.15 : 0,
+            0,
+          ]}
+        >
+          <Avatar data={peer.avatar} speed={speed} seated={!!peer.pose.ride} />
+        </group>
+      )}
       <mesh position-y={2.38} rotation-z={Math.PI / 4}>
         <octahedronGeometry args={[0.09]} />
         <meshBasicMaterial color="#4ac2ad" />

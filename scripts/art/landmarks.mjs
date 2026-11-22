@@ -12,7 +12,12 @@ async function library() {
     const y = 0.08 + f * 3.8,
       r = 12.8 + Math.sin(f * 1.6) * 1.2;
     if (f > 0) {
-      ribbon(stone, 7.4, r, y, 0.38, 0.55, tau - 0.55, 0.81);
+      if (f === 1) {
+        // Leave headroom above both curved stair runs. The upper end of
+        // each run meets the gallery at the back of the building.
+        ribbon(stone, 11.35, r, y, 0.38, 0.55, tau - 0.55, 0.81);
+        ribbon(stone, 7.4, 11.35, y, 0.38, 2.472, tau - 2.472, 0.81);
+      } else ribbon(stone, 7.4, r, y, 0.38, 0.55, tau - 0.55, 0.81);
       ribbon("light", 7.38, 7.48, y - 0.28, 0.06, 0.55, tau - 0.55, 0.81);
       ribbon("glass", 7.4, 7.43, y + 0.87, 0.8, 0.55, tau - 0.55, 0.81);
       ribbon(metal, 7.38, 7.47, y + 0.93, 0.06, 0.55, tau - 0.55, 0.81);
@@ -119,7 +124,7 @@ async function library() {
       const a = 0.6 + k * 0.095;
       const u = point(a, 7.75, 3.8 * f - 0.33),
         v = point(a, 11.65, 3.8 * f - 0.33);
-      beam(wood, u, v, 0.055);
+      if (f !== 1 || (a >= 2.472 && a <= tau - 2.472)) beam(wood, u, v, 0.055);
     }
   }
   for (const side of [-1, 1]) {
@@ -176,8 +181,26 @@ async function discovery() {
   for (let f = 0; f < 3; f++) {
     const y = f * 3.65;
     const r = 13.5 - f * 0.45;
-    ribbon(stone, 9.4, r, y + 0.26, 0.36, 0.99, tau - 0.99, 0.84);
-    ribbon("glass", 9.4, 9.46, y + 1.17, 0.88, 0.99, tau - 0.99, 0.84);
+    ribbon(
+      stone,
+      f === 1 ? 10.85 : 9.4,
+      r,
+      y + 0.26,
+      0.36,
+      0.99,
+      tau - 0.99,
+      0.84,
+    );
+    if (f === 1) {
+      for (const [lo, hi] of [
+        [0.99, 1.86],
+        [2.31, tau - 2.31],
+        [tau - 1.86, tau - 0.99],
+      ])
+        ribbon("glass", 9.4, 9.46, y + 1.17, 0.88, lo, hi, 0.84);
+    } else if (f === 0)
+      ribbon("glass", 9.4, 9.46, y + 1.17, 0.88, 1.4, tau - 1.4, 0.84);
+    else ribbon("glass", 9.4, 9.46, y + 1.17, 0.88, 0.99, tau - 0.99, 0.84);
     for (let j = 0; j < 20; j++) {
       const a = 1.04 + (j * (tau - 2.08)) / 20,
         b = a + (tau - 2.08) / 20;
@@ -197,7 +220,16 @@ async function discovery() {
         Math.atan2(z - Z, X - x),
       );
     }
-    ribbon(stone, 9.2, r + 0.4, y + 3.59, 0.29, 0.99, tau - 0.99, 0.84);
+    ribbon(
+      stone,
+      f === 0 ? 10.85 : 9.2,
+      r + 0.4,
+      y + 3.59,
+      0.29,
+      0.99,
+      tau - 0.99,
+      0.84,
+    );
   }
   cyl("#3b6873", 0, 0.26, 2.8, 5.3, 0.42);
   cyl("water", 0, 0.52, 2.8, 5, 0.08);
@@ -232,6 +264,7 @@ async function discovery() {
         0.2 + j * 0.174,
         0.43,
       );
+    box(stone, k * 8.75, 3.78, -4.75, 4.35, 0.24, 2.1);
     beam(metal, [k * 9.4, 1, 4.3], [k * 9.4, 4.6, -4], 0.064);
     planter(k * 8.6, 0, 6.7, 1.12);
     seat(k * 5.5, 0, 8.2);
@@ -314,25 +347,34 @@ await discovery();
 await innovation();
 async function plaza() {
   const { ribbon, beam, ball, cyl, box, planter, seat, save } = kit();
-  // A folded bronze ribbon marks the crossing of the city's three pedestrian routes.
-  for (let i = 0; i < 110; i++) {
-    const t = (i * tau) / 110,
-      u = ((i + 1) * tau) / 110,
-      at = (a) => [
-        2.55 * Math.sin(a),
-        4.3 + 2.6 * Math.sin(2 * a + 0.3),
-        0.93 * Math.cos(a),
-      ];
-    beam("#987e54", at(t), at(u), 0.245);
-    const p = at(t),
-      q = at(u);
-    beam(
-      "#e4c48d",
-      [p[0], p[1] + 0.17, p[2]],
-      [q[0], q[1] + 0.17, q[2]],
-      0.105,
-    );
+  // Monument letters face the arrival terrace.
+  for (const line of [
+    [
+      [-0.25, 5.85],
+      [-1.45, 5.85],
+      [-1.9, 5.43],
+      [-1.9, 4.78],
+      [-1.48, 4.47],
+      [-0.62, 4.47],
+      [-0.23, 4.1],
+      [-0.23, 3.43],
+      [-0.65, 3.04],
+      [-1.93, 3.04],
+    ],
+    [
+      [0.45, 5.85],
+      [0.45, 3.04],
+      [1.99, 3.04],
+    ],
+  ]) {
+    for (let i = 1; i < line.length; i++) {
+      const [x, y] = line[i - 1],
+        [u, v] = line[i];
+      beam("#dfb96f", [x, y, 0.12], [u, v, 0.12], 0.185);
+      ball("#dfb96f", x, y, 0.12, 0.185, 0.185, 0.185);
+    }
   }
+  box("#234743", 0, 2.13, 0, 4.9, 1.4, 0.48);
   cyl("#a59d8b", 0, 0.66, 0, 3.7, 0.28);
   cyl(stone, 0, 0.91, 0, 3, 0.28);
   cyl("#354b51", 0, 1.22, 0, 1.96, 0.38);

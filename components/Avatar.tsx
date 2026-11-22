@@ -20,12 +20,14 @@ export default function Avatar({
   data,
   speed,
   reading = false,
+  seated = false,
   vertical,
   locomotion,
 }: {
   data: AvatarData;
   speed?: RefObject<number>;
   reading?: boolean;
+  seated?: boolean;
   vertical?: RefObject<number>;
   locomotion?: RefObject<string>;
 }) {
@@ -133,6 +135,13 @@ export default function Avatar({
         );
         arm.rotation.z = direction * (0.094 + rest * (i === 0 ? 0.012 : 0.048));
         arm.rotation.y = direction * rest * 0.19;
+      }
+      if (seated && leg && knee && arm) {
+        leg.rotation.x = -1.12;
+        leg.rotation.z = direction * 0.2;
+        knee.rotation.x = 1.24;
+        arm.rotation.x = -0.96;
+        arm.rotation.z = direction * 0.08;
       }
     }
     if (

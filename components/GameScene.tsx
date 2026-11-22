@@ -18,7 +18,19 @@ import Avatar from "./Avatar";
 import { City, Lighting } from "./City";
 import { measure, type AvatarData } from "./avatar-data";
 import { landmarks, interactives } from "../lib/content";
+import {
+  newFleet,
+  rideIds,
+  vehicles,
+  type Ride,
+  type Parking,
+} from "../engine/transport";
+import { Vehicle, MotorPool } from "./Transport";
 export type Input = {
+  board?: boolean;
+  run?: boolean;
+  descend?: boolean;
+  climb?: boolean;
   dx: number;
   dz: number;
   jump: boolean;
@@ -31,9 +43,20 @@ export type Location = {
   z: number;
   id: string;
   mode?: string;
+  ride?: Ride;
+  nearbyRide?: Ride;
+  canClimb?: boolean;
+  rideHint?: string;
+  kmh?: number;
   y?: number;
 };
-export type Pose = { x: number; y: number; z: number; facing: number };
+export type Pose = {
+  x: number;
+  y: number;
+  z: number;
+  facing: number;
+  ride?: Ride;
+};
 export type GameProps = {
   pose: React.RefObject<Pose>;
   avatar: AvatarData;
@@ -49,6 +72,8 @@ export type GameProps = {
   peers: Neighbor[];
   deliveries: number;
   decor: number;
+  herd: boolean;
+  crop: boolean;
   weather: "auto" | "sun" | "rain";
 };
 function Player({
@@ -62,7 +87,15 @@ function Player({
   inside,
   panorama,
   distance,
-}: GameProps) {
+  fleet,
+  mounted,
+}: GameProps & {
+  fleet: React.RefObject<Record<Ride, Parking>>;
+  mounted: React.RefObject<Ride | undefined>;
+}) {
+  const [ride, setRide] = useState<Ride>();
+  const velocity = useRef(0),
+    notice = useRef("");
   const root = useRef<T.Group>(null),
     keys = useRef(new Set<string>()),
     speed = useRef(0),
@@ -80,6 +113,7 @@ function Player({
     sites.map((s) => "/models/" + s.file + "-far.glb"),
   );
   const physics = useRef<ReturnType<typeof makePhysics> | null>(null);
+  const autoClimb = useRef(false);
   const locomotion = useRef("");
   const feetGrounded = useRef(false);
   const heightScale = measure(avatar, "height"),
@@ -140,12 +174,23 @@ function Player({
               )),
         travel.z,
       );
+      if (mounted.current && !travel.resume)
+        fleet.current[mounted.current] = newFleet()[mounted.current];
+      mounted.current = travel.resume?.ride;
+      setRide(mounted.current);
+      velocity.current = 0;
+      notice.current = "";
+      if (mounted.current)
+        Object.assign(fleet.current[mounted.current], travel.resume);
+      input.current.board = false;
+      input.current.climb = false;
+      autoClimb.current = false;
       if (!travel.resume) input.current.turn = 0;
       root.current.rotation.y = travel.resume?.facing ?? Math.PI;
       vy.current = 0;
       snap.current = true;
     }
-  }, [travel, input]);
+  }, [travel, input, fleet, mounted]);
   useEffect(() => {
     const pressed = keys.current;
     pressed.clear();
@@ -170,6 +215,7 @@ function Player({
           "ShiftLeft",
           "ShiftRight",
           "Space",
+          "KeyC",
           "ArrowUp",
           "ArrowDown",
           "ArrowLeft",
@@ -247,8 +293,49 @@ function Player({
             Number(k.has("KeyW") || k.has("ArrowUp"));
     const mag = Math.hypot(dx, dz);
     speed.current =
-      mag > 0.08 ? (k.has("ShiftLeft") || k.has("ShiftRight") ? 10 : 5) : 0;
+      mag > 0.08
+        ? c.run || k.has("ShiftLeft") || k.has("ShiftRight")
+          ? 10
+          : 5
+        : 0;
     if (!physics.current) return;
+    let vehicle = mounted.current;
+    const nearby = rideIds.find((id) => {
+      const parked = fleet.current[id];
+      return (
+        Math.abs(p.y - parked.y) < 1.3 &&
+        Math.hypot(p.x - parked.x, p.z - parked.z) <
+          vehicles[id].width / 2 + 2.15
+      );
+    });
+    if (c.board && !paused && !panorama) {
+      c.board = false;
+      if (vehicle) {
+        const exit = physics.current.exit(p, g.rotation.y, vehicle);
+        if (Math.abs(velocity.current) > 1.1 || !exit)
+          notice.current =
+            "Berhenti di permukaan datar dengan ruang di samping untuk turun.";
+        else {
+          p.copy(exit);
+          vehicle = undefined;
+          velocity.current = 0;
+          vy.current = 0;
+          notice.current = "";
+        }
+      } else if (nearby) {
+        vehicle = nearby;
+        const seat = fleet.current[nearby];
+        p.set(seat.x, seat.y + 0.03, seat.z);
+        g.rotation.y = seat.facing;
+        c.turn = seat.facing - Math.PI;
+        velocity.current = 0;
+        notice.current = "";
+      }
+      gl.domElement.focus({ preventScroll: true });
+      mounted.current = vehicle;
+      setRide(vehicle);
+    }
+    physics.current.fleet(fleet.current, vehicle);
     const swimming =
       p.x < -82 &&
       Math.abs(p.x - riverX(p.z)) < 5.2 &&
@@ -260,74 +347,161 @@ function Player({
         Math.abs(p.x - (l.x + (l.zone === "hub" ? 3.5 : 4.2) + 0.9)) < 0.94 &&
         Math.abs(p.z - l.z) < 0.72,
     );
-    const climb = !!ladder && (c.jump || c.hold || k.has("Space")) && !paused;
+    const roof = ladder ? 3.52 + (landmarks.indexOf(ladder) % 3) * 0.22 : 0;
+    const canClimb = !!ladder && !vehicle && p.y < roof - 0.08;
+    if (c.climb) {
+      autoClimb.current = canClimb;
+      c.climb = false;
+    }
+    if (!ladder || vehicle) autoClimb.current = false;
+    const climb =
+      !!ladder &&
+      !vehicle &&
+      (autoClimb.current || c.jump || c.hold || k.has("Space")) &&
+      !paused;
     const elevator =
       Math.abs(p.x - liftSite.x) < 0.93 && Math.abs(p.z - liftSite.z) < 0.69;
-    const mode = climb
-      ? "Memanjat"
-      : swimming
-        ? "Berenang"
-        : elevator
-          ? "Lift"
-          : !feetGrounded.current
-            ? "Di udara"
-            : speed.current > 5
-              ? "Berlari"
-              : "Berjalan";
+    const mode = vehicle
+      ? vehicles[vehicle].label
+      : climb
+        ? "Memanjat"
+        : swimming
+          ? "Berenang"
+          : elevator
+            ? "Lift"
+            : !feetGrounded.current
+              ? "Di udara"
+              : speed.current > 5
+                ? "Berlari"
+                : "Berjalan";
     locomotion.current = mode;
     if (!paused && !panorama) {
-      let vx = 0,
-        vz = 0;
-      if (speed.current) {
-        dx /= mag;
-        dz /= mag;
-        vx =
-          (dx * Math.cos(c.turn) + dz * Math.sin(c.turn)) *
-          speed.current *
-          (swimming ? 0.56 : 1);
-        vz =
-          (dz * Math.cos(c.turn) - dx * Math.sin(c.turn)) *
-          speed.current *
-          (swimming ? 0.56 : 1);
-        const turn = Math.atan2(vx, vz) - g.rotation.y;
-        g.rotation.y +=
-          Math.atan2(Math.sin(turn), Math.cos(turn)) * (1 - Math.exp(-13 * dt));
-      }
-      if (c.jump && feetGrounded.current && !climb) vy.current = 6;
-      const jumps = c.jump;
-      c.jump = false;
-      const steps = Math.max(1, Math.ceil(dt / (1 / 45))),
-        step = dt / steps;
-      for (let i = 0; i < steps; i++) {
-        const time = Date.now() / 1000 - dt + step * (i + 1);
-        vy.current = climb
-          ? 2.8
-          : swimming
-            ? (waterLevel(p.z) - 0.91 - p.y) * 4 + (jumps ? 2 : 0)
-            : Math.max(-28, vy.current - 17 * step);
-        const liftY = liftAt(time);
-        if (elevator && Math.abs(p.y - liftY) < 0.3 && vy.current <= 0) {
-          p.y = liftY + 0.025;
-          vy.current = -0.45;
-        }
-        feetGrounded.current = physics.current.move(
-          p,
-          vx * step,
-          vy.current * step,
-          vz * step,
-          time,
+      if (vehicle) {
+        const spec = vehicles[vehicle],
+          air = vehicle === "helikopter";
+        const throttle = T.MathUtils.clamp(-dz, -1, 1);
+        velocity.current = T.MathUtils.damp(
+          velocity.current,
+          throttle * (throttle < 0 ? 0.38 : 1) * spec.speed,
+          throttle ? 2.2 : 5.5,
+          dt,
         );
-        if (feetGrounded.current && vy.current < 0) vy.current = 0;
-        if (
-          climb &&
-          ladder &&
-          p.y > 3.6 + (landmarks.indexOf(ladder) % 3) * 0.22
-        ) {
-          physics.current.move(p, -1.1, -0.035, 0, time);
-          break;
+        const steer =
+          -T.MathUtils.clamp(dx, -1, 1) *
+          (air
+            ? 1
+            : Math.min(1, Math.abs(velocity.current) / 1.6) *
+              Math.sign(velocity.current));
+        const heading =
+          g.rotation.y + steer * dt * (vehicle === "motor" ? 2.4 : 1.65);
+        if (physics.current.turn(p, heading)) g.rotation.y = heading;
+        c.turn +=
+          Math.atan2(
+            Math.sin(g.rotation.y - Math.PI - c.turn),
+            Math.cos(g.rotation.y - Math.PI - c.turn),
+          ) *
+          (1 - Math.exp(-3 * dt));
+        const rise = air
+          ? Number(c.hold || k.has("Space")) -
+            Number(c.descend || k.has("KeyC"))
+          : 0;
+        const steps = Math.ceil(dt / 0.025) || 1;
+        for (let i = 0; i < steps; i++) {
+          const step = dt / steps;
+          vy.current = air
+            ? rise > 0 && p.y >= 34
+              ? 0
+              : rise * 5
+            : Math.max(-18, vy.current - 17 * step);
+          const startX = p.x,
+            startZ = p.z;
+          const grounded = physics.current.move(
+            p,
+            Math.sin(g.rotation.y) * velocity.current * step,
+            vy.current * step,
+            Math.cos(g.rotation.y) * velocity.current * step,
+            Date.now() / 1000,
+          );
+          const forward =
+            (p.x - startX) * Math.sin(g.rotation.y) +
+            (p.z - startZ) * Math.cos(g.rotation.y);
+          if (Math.abs(forward) < Math.abs(velocity.current) * step * 0.55)
+            velocity.current = forward / step;
+          if (grounded && vy.current < 0) vy.current = 0;
+        }
+        Object.assign(fleet.current[vehicle], {
+          x: p.x,
+          y: p.y,
+          z: p.z,
+          facing: g.rotation.y,
+        });
+        c.jump = false;
+      } else {
+        let vx = 0,
+          vz = 0;
+        if (speed.current) {
+          dx /= mag;
+          dz /= mag;
+          vx =
+            (dx * Math.cos(c.turn) + dz * Math.sin(c.turn)) *
+            speed.current *
+            (swimming ? 0.56 : 1);
+          vz =
+            (dz * Math.cos(c.turn) - dx * Math.sin(c.turn)) *
+            speed.current *
+            (swimming ? 0.56 : 1);
+          const turn = Math.atan2(vx, vz) - g.rotation.y;
+          g.rotation.y +=
+            Math.atan2(Math.sin(turn), Math.cos(turn)) *
+            (1 - Math.exp(-13 * dt));
+        }
+        if (climb && ladder) {
+          const sideX = ladder.x + (ladder.zone === "hub" ? 3.5 : 4.2) + 0.94;
+          vx = T.MathUtils.clamp((sideX - p.x) * 10, -4, 4);
+          vz = T.MathUtils.clamp((ladder.z - p.z) * 10, -3, 3);
+          g.rotation.y = -Math.PI / 2;
+        }
+        if (c.jump && feetGrounded.current && !climb) vy.current = 6;
+        const jumps = c.jump;
+        c.jump = false;
+        const steps = Math.max(1, Math.ceil(dt / (1 / 45))),
+          step = dt / steps;
+        for (let i = 0; i < steps; i++) {
+          const time = Date.now() / 1000 - dt + step * (i + 1);
+          vy.current = climb
+            ? 2.8
+            : swimming
+              ? (waterLevel(p.z) - 0.91 - p.y) * 4 + (jumps ? 2 : 0)
+              : Math.max(-28, vy.current - 17 * step);
+          const liftY = liftAt(time);
+          if (elevator && Math.abs(p.y - liftY) < 0.3 && vy.current <= 0) {
+            p.y = liftY + 0.025;
+            vy.current = -0.45;
+          }
+          feetGrounded.current = physics.current.move(
+            p,
+            vx * step,
+            vy.current * step,
+            vz * step,
+            time,
+          );
+          if (feetGrounded.current && vy.current < 0) vy.current = 0;
+          if (
+            climb &&
+            ladder &&
+            p.y > 3.6 + (landmarks.indexOf(ladder) % 3) * 0.22
+          ) {
+            physics.current.move(p, -1.55, -0.035, 0, time);
+            autoClimb.current = false;
+            vy.current = 0;
+            break;
+          }
         }
       }
     }
+    const kmh = vehicle
+      ? Math.round(Math.abs(velocity.current) * 3.6)
+      : undefined;
     const baseY = p.y;
     const arm = inside ? Math.min(distance, 3.6) : distance;
     rayOrigin.set(p.x, baseY + 1.45 * heightScale, p.z);
@@ -373,6 +547,7 @@ function Player({
         p.z - Math.cos(c.turn) * 2.7,
       );
     }
+    pose.current.ride = vehicle;
     pose.current.x = p.x;
     pose.current.y = p.y;
     pose.current.z = p.z;
@@ -410,9 +585,24 @@ function Player({
         last.z !== p.z ||
         last.id !== closest ||
         last.mode !== mode ||
+        last.kmh !== kmh ||
+        last.nearbyRide !== nearby ||
+        last.canClimb !== canClimb ||
+        last.rideHint !== notice.current ||
         Math.abs((last.y ?? 0) - p.y) > 0.1
       ) {
-        const next = { x: p.x, y: p.y, z: p.z, id: closest, mode };
+        const next = {
+          x: p.x,
+          y: p.y,
+          z: p.z,
+          id: closest,
+          mode,
+          ride: vehicle,
+          kmh,
+          nearbyRide: nearby,
+          canClimb,
+          rideHint: notice.current,
+        };
         reported.current = next;
         report(next);
       }
@@ -429,13 +619,26 @@ function Player({
           depthWrite={false}
         />
       </mesh>
-      <Avatar
-        data={avatar}
-        speed={speed}
-        reading={paused}
-        vertical={vy}
-        locomotion={locomotion}
-      />
+      {ride && <Vehicle id={ride} active />}
+      {ride !== "helikopter" && (
+        <group
+          scale={ride === "mobil" ? 0.85 / heightScale : 1}
+          position={[
+            ride === "mobil" ? -0.33 : 0,
+            ride === "mobil" ? -0.24 : ride ? -0.15 : 0,
+            0,
+          ]}
+        >
+          <Avatar
+            seated={!!ride}
+            data={avatar}
+            speed={speed}
+            reading={paused}
+            vertical={vy}
+            locomotion={locomotion}
+          />
+        </group>
+      )}
     </group>
   );
 }
@@ -557,6 +760,8 @@ export function Preview({
   );
 }
 export default function GameScene(props: GameProps) {
+  const fleet = useRef(newFleet()),
+    mounted = useRef<Ride | undefined>(undefined);
   const [near, setNear] = useState("");
   const [balancedDpr, setBalancedDpr] = useState(1);
   const l = interactives.find((l) => l.id === near);
@@ -595,7 +800,13 @@ export default function GameScene(props: GameProps) {
         high={props.quality === "High"}
       />
       <City />
-      <Neighborhood pose={props.pose} decor={props.decor} />
+      <MotorPool fleet={fleet} ride={mounted} pose={props.pose} />
+      <Neighborhood
+        pose={props.pose}
+        decor={props.decor}
+        herd={props.herd}
+        crop={props.crop}
+      />
       {props.peers.map((peer) => (
         <CityNeighbor key={peer.id} peer={peer} />
       ))}
@@ -608,6 +819,8 @@ export default function GameScene(props: GameProps) {
         </mesh>
       )}
       <Player
+        fleet={fleet}
+        mounted={mounted}
         {...props}
         report={(loc) => {
           setNear(loc.id);

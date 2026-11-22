@@ -1108,3 +1108,12 @@ html[data-city-reader] .article > .crumb,
 html[data-city-reader] .reading > a[href^="/explore"] {
   display: none;
 }
+
+.district-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:7px}
+.district-grid button {background:#eef3ed;color:#203e38;text-align:left;border:1px solid #afc4b9;border-radius:8px;padding:10px;cursor:pointer}
+.district-grid small {display:block;margin-top:3px}
+.game .ride-hint {position:absolute;left:50%;bottom:126px;transform:translateX(-50%);padding:8px 14px;background:#18352f;color:white;border-radius:7px}
+.game .helicopter-down {bottom:110px}
+
+.game .run-toggle {bottom:72px}
+.game .run-toggle[aria-pressed="true"] {background:#926437}

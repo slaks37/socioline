@@ -1,5 +1,8 @@
 "use client";
 import { useCitySession } from "./useCitySession";
+import { cityDistricts, districtAt } from "../lib/city-districts";
+import { vehicles } from "../engine/transport";
+import CityMentor from "./CityMentor";
 import Ambience from "./Ambience";
 import AvatarStudio from "./AvatarStudio";
 import CityReader, { ReadingLink, type Reading } from "./CityReader";
@@ -54,6 +57,12 @@ const travelPoints = [
   })),
   { name: "Tepian sungai", x: -90, z: 10 },
   { name: "Air terjun", x: -91, z: -40 },
+  { name: "Tangga Discovery Center", x: 8, z: -30.85 },
+  { name: "Tangga galeri pustaka", x: -40.12, z: -29.3 },
+  { name: "Tangga atap koperasi", x: 30.54, z: 30.1 },
+  { name: "Garasi motor", x: 16, z: 45.8 },
+  { name: "Garasi mobil", x: 22, z: 46 },
+  { name: "Helipad", x: 33, z: 50.45 },
   { name: "Tangga panjat studio", x: -17.55, z: 24 },
   { name: "Lift pustaka", x: -35, z: 19.1 },
   ...districts.map((d) => ({ name: d.name, x: d.x, z: -18 })),
@@ -168,12 +177,15 @@ export default function Explorer() {
     }>({ ...travelPoints[0], seq: 0 }),
     [loc, setLoc] = useState<Location>({ x: 0, z: 25, id: "" });
   const input = useRef<Input>({ dx: 0, dz: 0, jump: false, turn: 0, tilt: 4 });
+  const [running, setRunning] = useState(false);
   const [weather, setWeather] = useState<"auto" | "sun" | "rain">("auto");
   const [life, setLife] = useState<Life>(freshLife),
     [activityNote, setActivityNote] = useState("");
-  const activity = activitySites.find(
-    (s) => Math.hypot(loc.x - s.x, loc.z - s.z) < 2.55 && (loc.y ?? 0) < 1.4,
-  );
+  const activity =
+    !loc.ride &&
+    activitySites.find(
+      (s) => Math.hypot(loc.x - s.x, loc.z - s.z) < 2.55 && (loc.y ?? 0) < 1.4,
+    );
   const currentActivity = activitySites.find(
     (s) => "activity-" + s.id === modal,
   );
@@ -262,7 +274,11 @@ export default function Explorer() {
       }
       if (e.code === "KeyM") open("travel");
       if (e.code === "KeyE") {
-        if (activity) {
+        if (loc.ride || loc.nearbyRide) {
+          input.current.board = true;
+        } else if (loc.canClimb) {
+          input.current.climb = true;
+        } else if (activity) {
           setActivityNote("");
           open("activity-" + activity.id);
         } else if (loc.id) launch(loc.id);
@@ -270,7 +286,16 @@ export default function Explorer() {
     };
     window.addEventListener("keydown", k);
     return () => window.removeEventListener("keydown", k);
-  }, [playing, loc.id, modal, launch, activity]);
+  }, [
+    playing,
+    loc.id,
+    modal,
+    launch,
+    activity,
+    loc.ride,
+    loc.nearbyRide,
+    loc.canClimb,
+  ]);
   const save = () => {
     window.scrollTo(0, 0);
     try {
@@ -426,6 +451,8 @@ export default function Explorer() {
                 distance,
                 weather,
                 decor: life.decor,
+                herd: !!life.herd,
+                crop: !!life.cropReady,
                 peers: network.peers,
                 deliveries: network.deliveries,
               }}
@@ -441,15 +468,23 @@ export default function Explorer() {
               href="/"
               aria-label="SocioLine"
             >
-              <img src="/socioline.webp" alt="SocioLine" />
+              <img src="/socioline-sl.svg" alt="SocioLine" />
             </Link>
             <b>
               <MapPin size={15} />
-              {zone}
+              {inside ? zone : districtAt(loc.x, loc.z).name}
               {loc.mode && ["Memanjat", "Berenang", "Lift"].includes(loc.mode)
                 ? " · " + loc.mode
                 : ""}
             </b>
+            {loc.ride && (
+              <b>
+                {vehicles[loc.ride].label} · {loc.kmh ?? 0} km/j
+                {loc.ride === "helikopter"
+                  ? " · " + Math.round(loc.y ?? 0) + " m"
+                  : ""}
+              </b>
+            )}
             <button
               aria-label="Peta dan perjalanan"
               onClick={() => open("travel")}
@@ -489,10 +524,43 @@ export default function Explorer() {
             />
           </div>
           <div className="controls">
-            WASD gerak · Seret kamera · Shift lari · Spasi lompat / tahan di
-            tangga panjat · E interaksi · M peta · Esc jeda
+            {loc.ride ? (
+              vehicles[loc.ride].label +
+              " · W/S gas dan mundur · A/D kemudi · lepas gas untuk berhenti · E turun" +
+              (loc.ride === "helikopter" ? " · Spasi naik · C turun" : "")
+            ) : (
+              <>
+                WASD gerak · Seret kamera · Shift lari · Spasi lompat / tahan di
+                tangga panjat · E interaksi · M peta · Esc jeda
+              </>
+            )}
           </div>
-          {activity && (
+          {(loc.ride || loc.nearbyRide) && (
+            <button
+              className="interact"
+              onClick={() => {
+                input.current.board = true;
+              }}
+            >
+              {loc.ride
+                ? "Turun dari " + vehicles[loc.ride].label
+                : "Naik " + vehicles[loc.nearbyRide!].label}
+            </button>
+          )}
+          {loc.ride && loc.rideHint && (
+            <output className="ride-hint">{loc.rideHint}</output>
+          )}
+          {loc.canClimb && !loc.nearbyRide && (
+            <button
+              className="interact"
+              onClick={() => {
+                input.current.climb = true;
+              }}
+            >
+              Panjat ke atap
+            </button>
+          )}
+          {activity && !loc.canClimb && !loc.nearbyRide && (
             <button
               className="interact"
               onClick={() => {
@@ -503,15 +571,19 @@ export default function Explorer() {
               {activity.item}
             </button>
           )}
-          {near && !activity && (
-            <button className="interact" onClick={() => launch(near.id)}>
-              {near.id === "word-library"
-                ? inside
-                  ? "Keluar perpustakaan"
-                  : "Masuk Grand Library"
-                : "Interaksi · " + near.name}
-            </button>
-          )}
+          {near &&
+            !loc.canClimb &&
+            !activity &&
+            !loc.nearbyRide &&
+            !loc.ride && (
+              <button className="interact" onClick={() => launch(near.id)}>
+                {near.id === "word-library"
+                  ? inside
+                    ? "Keluar perpustakaan"
+                    : "Masuk Grand Library"
+                  : "Interaksi · " + near.name}
+              </button>
+            )}
           <div
             className="stick"
             aria-label="Touch joystick"
@@ -529,21 +601,49 @@ export default function Explorer() {
           >
             ✥
           </div>
-          <button
-            className="jump"
-            onPointerDown={(e) => {
-              input.current.hold = true;
-              e.currentTarget.setPointerCapture(e.pointerId);
-            }}
-            onLostPointerCapture={() => {
-              input.current.hold = false;
-            }}
-            onClick={() => {
-              input.current.jump = true;
-            }}
-          >
-            Lompat
-          </button>
+          {!loc.ride && (
+            <button
+              className="jump run-toggle"
+              aria-pressed={running}
+              onClick={() => {
+                input.current.run = !running;
+                setRunning(!running);
+              }}
+            >
+              Lari
+            </button>
+          )}
+          {(!loc.ride || loc.ride === "helikopter") && (
+            <button
+              className="jump"
+              onPointerDown={(e) => {
+                input.current.hold = true;
+                e.currentTarget.setPointerCapture(e.pointerId);
+              }}
+              onLostPointerCapture={() => {
+                input.current.hold = false;
+              }}
+              onClick={() => {
+                input.current.jump = true;
+              }}
+            >
+              {loc.ride === "helikopter" ? "Naik" : loc.ride ? "" : "Lompat"}
+            </button>
+          )}
+          {loc.ride === "helikopter" && (
+            <button
+              className="jump helicopter-down"
+              onPointerDown={(e) => {
+                input.current.descend = true;
+                e.currentTarget.setPointerCapture(e.pointerId);
+              }}
+              onLostPointerCapture={() => {
+                input.current.descend = false;
+              }}
+            >
+              Rendah
+            </button>
+          )}
           {modal && (
             <Modal
               close={closePanel}
@@ -604,6 +704,18 @@ export default function Explorer() {
                     Energi {life.energy}/5 · {life.coins} koin · {life.supplies}{" "}
                     bahan · {life.stock} produk
                   </p>
+                  <CityMentor site={currentActivity.id} life={life} />
+                  {currentActivity.id === "home" && life.homeOwner && (
+                    <p>Rumah pribadimu</p>
+                  )}
+                  {currentActivity.id === "farm" && (
+                    <p>
+                      {life.cropReady
+                        ? "Petak ditanami."
+                        : "Petak siap ditanami."}{" "}
+                      {life.herd ? "Sapi berada di kandang." : ""}
+                    </p>
+                  )}
                   {network.online && currentActivity.id === "market" && (
                     <p>
                       Pesanan yang sudah diantar bersama: {network.deliveries}
@@ -729,6 +841,25 @@ export default function Explorer() {
                     src="/minimap.svg"
                     alt="Peta kota dan lembah sungai di barat. Dari barat ke timur: The Word, The World, dan The Work. Central Hub berada di selatan."
                   />
+                  <h3>Distrik kota</h3>
+                  <div className="district-grid">
+                    {cityDistricts.map((d, i) => (
+                      <button
+                        key={d.name}
+                        aria-label={d.name}
+                        aria-describedby={`district-use-${i}`}
+                        onClick={() => {
+                          setPanorama(false);
+                          setTravel({ ...d, seq: travel.seq + 1 });
+                          open("");
+                        }}
+                      >
+                        <b>{d.name}</b>
+                        <small id={`district-use-${i}`}>{d.use}</small>
+                      </button>
+                    ))}
+                  </div>
+                  <h3>Tempat tujuan</h3>
                   <div className="related">
                     {travelPoints.map((t) => (
                       <button

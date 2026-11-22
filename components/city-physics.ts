@@ -1,3 +1,10 @@
+import {
+  rideIds,
+  vehicles as fleetSpecs,
+  type Ride,
+  type Parking,
+} from "../engine/transport";
+import { streetTrees, doorSites, doorAmount } from "../lib/streets";
 import R from "@dimforge/rapier3d-compat";
 import * as T from "three";
 import { cityParts, sectorCenter, type Part } from "../lib/city-plan";
@@ -76,6 +83,23 @@ export function makePhysics(
     }
     return active;
   }
+  const doors = doorSites.map((site) => ({
+    ...site,
+    opening: 0,
+    panels: [-1, 1].map((side) =>
+      box(site.x + side * 0.53, 1.44, site.z + 0.04, 1.04, 2.28, 0.085),
+    ),
+  }));
+  for (const t of streetTrees(false)) {
+    if (t.x > -82 && t.x < 82 && t.z > -72 && t.z < 58)
+      world.createCollider(
+        R.ColliderDesc.cylinder(t.h * 0.375, 0.22).setTranslation(
+          t.x,
+          t.h * 0.37,
+          t.z,
+        ),
+      );
+  }
   const { ground, ...sectors } = cityParts();
   mountSector(ground);
   const mounted = new Map<string, R.Collider[]>();
@@ -117,6 +141,40 @@ export function makePhysics(
       );
     });
   }
+  // A single continuous surface over each flight avoids trapping the capsule
+  // between tread edges, including at slow touch-controller speeds.
+  function flight(
+    x: number,
+    z0: number,
+    z1: number,
+    width: number,
+    low: number,
+    high: number,
+  ) {
+    const vertices = [];
+    for (const dx of [-width / 2, width / 2]) {
+      vertices.push(
+        x + dx,
+        -0.3,
+        z0,
+        x + dx,
+        low,
+        z0,
+        x + dx,
+        high,
+        z1,
+        x + dx,
+        -0.3,
+        z1,
+      );
+    }
+    world.createCollider(
+      R.ColliderDesc.convexHull(Float32Array.from(vertices))!,
+    );
+  }
+  for (const x of [-8, 8]) flight(x, -31.25, -39.82, 2.84, 0.23, 4.1);
+  flight(0, 28.52, 41.62, 13, 0.19, 2.76);
+  flight(30.54, 28.98, 22.62, 1.55, 0.21, 3.78);
   for (const tree of bankTrees)
     world.createCollider(
       R.ColliderDesc.cylinder(tree.h * 0.38, tree.h * 0.047).setTranslation(
@@ -150,12 +208,124 @@ export function makePhysics(
   motor.enableSnapToGround(0.2);
   motor.setMaxSlopeClimbAngle(Math.PI * 0.29);
   motor.setMinSlopeSlideAngle(Math.PI * 0.34);
+  const parked = new Map(
+    rideIds.map((id) => {
+      const v = fleetSpecs[id];
+      return [id, box(v.x, v.height / 2, v.z, v.width, v.height, v.length)];
+    }),
+  );
+  const upright = new R.Capsule(half - radius, radius);
+  const identity = { x: 0, y: 0, z: 0, w: 1 };
+  const rotation = (a: number) => ({
+    x: 0,
+    y: Math.sin(a / 2),
+    z: 0,
+    w: Math.cos(a / 2),
+  });
+  let fleetReady = false;
+  let riding: Ride | undefined,
+    centerHeight = half;
   const setPosition = (p: T.Vector3) =>
-    player.setTranslation({ x: p.x, y: p.y + half, z: p.z });
+    player.setTranslation({ x: p.x, y: p.y + centerHeight, z: p.z });
   return {
     world,
+    fleet(parking: Record<Ride, Parking>, active?: Ride) {
+      if (fleetReady && riding === active) return;
+      fleetReady = true;
+      for (const id of rideIds) {
+        const col = parked.get(id)!,
+          p = parking[id],
+          v = fleetSpecs[id];
+        col.setEnabled(id !== active);
+        if (id !== active) {
+          col.setTranslation({ x: p.x, y: p.y + v.height / 2, z: p.z });
+          col.setRotation(rotation(p.facing));
+        }
+      }
+      if (active !== riding) {
+        riding = active;
+        centerHeight = active ? fleetSpecs[active].height / 2 : half;
+        player.setShape(
+          active
+            ? new R.Cuboid(
+                fleetSpecs[active].width / 2,
+                centerHeight,
+                fleetSpecs[active].length / 2,
+              )
+            : upright,
+        );
+        player.setRotation(identity);
+      }
+      world.updateSceneQueries();
+    },
+    turn(p: T.Vector3, facing: number) {
+      if (!riding) return true;
+      const v = fleetSpecs[riding],
+        rot = rotation(facing);
+      const obstruction = world.intersectionWithShape(
+        { x: p.x, y: p.y + centerHeight + 0.1, z: p.z },
+        rot,
+        new R.Cuboid(
+          v.width / 2 - 0.02,
+          centerHeight - 0.1,
+          v.length / 2 - 0.02,
+        ),
+        undefined,
+        undefined,
+        player,
+      );
+      if (!obstruction) player.setRotation(rot);
+      return !obstruction;
+    },
+    exit(p: T.Vector3, angle: number, id: Ride) {
+      const v = fleetSpecs[id];
+      for (const side of [-1, 1]) {
+        const offset = v.width / 2 + radius + 0.32,
+          x = p.x + side * Math.cos(angle) * offset,
+          z = p.z - side * Math.sin(angle) * offset;
+        const hit = world.castRay(
+          new R.Ray({ x, y: p.y + 0.48, z }, { x: 0, y: -1, z: 0 }),
+          1.25,
+          true,
+          undefined,
+          undefined,
+          player,
+        );
+        if (!hit) continue;
+        const y = p.y + 0.48 - hit.toi + 0.035;
+        if (
+          !world.intersectionWithShape(
+            { x, y: y + half, z },
+            identity,
+            upright,
+            undefined,
+            undefined,
+            player,
+          )
+        )
+          return new T.Vector3(x, y, z);
+      }
+      return null;
+    },
     move(p: T.Vector3, dx: number, dy: number, dz: number, clock: number) {
       stream(p.x, p.z);
+      for (const door of doors) {
+        if (
+          !door.opening &&
+          (Math.abs(p.x - door.x) > 4.4 || Math.abs(p.z - door.z) > 4.4)
+        )
+          continue;
+        const opening = doorAmount(door.x, door.z, p.x, p.z);
+        if (Math.abs(opening - door.opening) < 0.005) continue;
+        door.opening = opening;
+        door.panels.forEach((panel, i) =>
+          panel.setTranslation({
+            x: door.x + (i ? 1 : -1) * (0.53 + 1.04 * opening),
+            y: 1.44,
+            z: door.z + 0.04,
+          }),
+        );
+      }
       lift.setEnabled(p.y >= liftAt(clock) - 0.33);
       lift.setTranslation({
         x: liftSite.x,

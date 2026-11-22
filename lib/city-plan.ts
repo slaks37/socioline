@@ -138,6 +138,7 @@ export function cityParts() {
     box(x, height + 0.1, z, w + 0.76, 0.26, d + 0.72, "#d8c3a3");
     box(x, height + 0.26, z, w - 0.24, 0.08, d - 0.24, "#c9ad87");
     if (l.id === "collaboration-center") {
+      box(x - w / 2 + 0.34, height + 0.2, z - 2.33, 0.99, 0.2, 1.6, "#c8a783");
       const stairs = 19;
       for (let step = 0; step < stairs; step++) {
         const rise = 0.23 + ((height + 0.07) * step) / (stairs - 1);
@@ -182,7 +183,7 @@ export function cityParts() {
     }
     if (l.kind === 3 || l.kind === 4) {
       box(
-        x - w * 0.18,
+        x + (l.id === "collaboration-center" ? 1 : -1) * w * 0.18,
         height + 0.91,
         z - 0.75,
         w * 0.44,
@@ -191,7 +192,7 @@ export function cityParts() {
         accent,
       );
       box(
-        x - w * 0.18,
+        x + (l.id === "collaboration-center" ? 1 : -1) * w * 0.18,
         height + 1.62,
         z - 0.75,
         w * 0.5,
@@ -200,7 +201,7 @@ export function cityParts() {
         plaster,
       );
       box(
-        x - w * 0.18,
+        x + (l.id === "collaboration-center" ? 1 : -1) * w * 0.18,
         height + 1.02,
         z - 0.75 + d * 0.2,
         w * 0.35,
@@ -219,26 +220,107 @@ export function cityParts() {
         d / 2 - 0.7,
         "#95735b",
       );
-    box(x, height + 0.55, z - d / 2, w, 0.54, 0.12, "#95735b");
+    const inset = l.id === "collaboration-center" ? 2.1 : 0;
+    box(
+      x + inset / 2,
+      height + 0.55,
+      z - d / 2,
+      w - inset,
+      0.54,
+      0.12,
+      "#95735b",
+    );
     box(x, 2.8, z + d / 2 + 0.45, 3, 0.14, 1.15, accent);
-    // Bench, work surface, legs, shelves and books inside the room.
-    box(x - w * 0.28, 0.56, z - 0.35, 1.4, 0.22, 0.66, "#b78057");
-    box(x - w * 0.28, 0.33, z - 0.35, 1.12, 0.37, 0.48, shelf);
-    box(x + w * 0.22, 0.99, z - 1.15, 1.65, 0.14, 0.9, "#a86f48");
-    for (const side of [-1, 1])
-      box(x + w * 0.22 + side * 0.67, 0.61, z - 1.15, 0.11, 0.69, 0.65, shelf);
-    for (let row = 0; row < 3; row++) {
-      box(x, 0.86 + row * 0.58, z - d / 2 + 0.33, 3, 0.1, 0.5, shelf);
-      for (let book = 0; book < 8; book++)
+    if (l.id === "calling-house") {
+      // Bed and study nook sit along opposite walls, leaving the door and centre aisle clear.
+      box(x - 2.6, 0.52, z - 1.72, 1.68, 0.48, 2.25, "#89684c");
+      box(x - 2.6, 0.82, z - 1.72, 1.64, 0.19, 2.19, "#d9c6aa");
+      box(x - 2.6, 0.95, z - 2.4, 1.17, 0.11, 0.43, "#eee5d0");
+      box(x - 2.6, 0.94, z - 1.22, 1.65, 0.09, 1.12, "#64867d");
+      box(x - 0.98, 1.1, z - 2.45, 0.13, 1.67, 1.7, "#aa906e");
+      box(x + 2.8, 0.98, z - 1.42, 1.73, 0.12, 1.08, "#b48357");
+      for (const dx of [2.12, 3.48])
+        box(x + dx, 0.62, z - 1.42, 0.13, 0.67, 0.86, shelf);
+      box(x + 2.76, 0.54, z - 0.38, 0.82, 0.46, 0.68, "#758b80");
+      box(x - 2.65, 0.52, z + 1.05, 1.69, 0.53, 0.81, "#8e735a");
+      box(x - 2.65, 0.88, z + 0.72, 1.69, 0.65, 0.16, "#789084");
+    } else if (
+      [
+        "collaboration-center",
+        "experiment-workshop",
+        "mission-model-building",
+        "scripture-gallery",
+      ].includes(l.id)
+    ) {
+      const shop = l.id === "collaboration-center",
+        workshop = l.id === "experiment-workshop";
+      // Place teaching equipment against the back wall and leave a continuous aisle from the door.
+      box(
+        x - w * 0.28,
+        0.72,
+        z - 0.46,
+        1.16,
+        0.88,
+        2.14,
+        workshop ? "#51626a" : "#a27e5b",
+      );
+      box(x - w * 0.28, 1.21, z - 0.46, 1.35, 0.12, 2.36, "#d6ba90");
+      for (let j = 0; j < 3; j++) {
+        const xx = x + (j - 1) * 1.52;
+        box(xx, 0.59, z - d * 0.36, 1.35, 0.65, 0.7, "#886a52");
+        box(xx, 1.0, z - d * 0.36, 1.44, 0.17, 0.78, "#d4ba95");
+        if (shop || workshop) {
+          box(
+            xx,
+            1.29,
+            z - d * 0.36,
+            0.58,
+            0.41,
+            0.4,
+            ["#b98255", "#79958a", "#c3a05d"][j],
+          );
+        } else {
+          box(xx, 1.44, z - d * 0.36, 1.03, 0.66, 0.12, "#394b51");
+          box(xx, 1.46, z - d * 0.36 + 0.07, 0.91, 0.52, 0.02, "#93c4b5");
+        }
+      }
+      box(
+        x + w * 0.35,
+        1.15,
+        z - 0.65,
+        0.62,
+        1.74,
+        1.62,
+        workshop ? "#627d73" : "#b49a77",
+      );
+    } else {
+      // Bench, work surface, legs, shelves and books inside the room.
+      box(x - w * 0.28, 0.56, z - 0.35, 1.4, 0.22, 0.66, "#b78057");
+      box(x - w * 0.28, 0.33, z - 0.35, 1.12, 0.37, 0.48, shelf);
+      box(x + w * 0.22, 0.99, z - 1.15, 1.65, 0.14, 0.9, "#a86f48");
+      for (const side of [-1, 1])
         box(
-          x - 1.12 + book * 0.29,
-          1.08 + row * 0.58,
-          z - d / 2 + 0.3,
-          0.19,
-          0.36,
-          0.27,
-          [accent, "#c69d66", "#9e6557"][book % 3],
+          x + w * 0.22 + side * 0.67,
+          0.61,
+          z - 1.15,
+          0.11,
+          0.69,
+          0.65,
+          shelf,
         );
+      for (let row = 0; row < 3; row++) {
+        box(x, 0.86 + row * 0.58, z - d / 2 + 0.33, 3, 0.1, 0.5, shelf);
+        for (let book = 0; book < 8; book++)
+          box(
+            x - 1.12 + book * 0.29,
+            1.08 + row * 0.58,
+            z - d / 2 + 0.3,
+            0.19,
+            0.36,
+            0.27,
+            [accent, "#c69d66", "#9e6557"][book % 3],
+          );
+      }
     }
     // Exterior ladder on the right wall. It terminates inside the roof parapet opening.
     for (const dz of [-0.4, 0.4])
@@ -268,6 +350,14 @@ export function cityParts() {
     box(x, 0.72, 7, 2.6, 0.35, 0.65, "#a78157");
     box(x, 1.04, 6.74, 2.6, 0.65, 0.16, "#a78157");
   }
+  // An open apron joins the transit stands to the south road.
+  box(25, 0.015, 46.5, 32, 0.11, 12, "#626f6c");
+  box(42, 0.03, 41.8, 4, 0.14, 7.5, "#667572");
+  for (const x of [13, 19, 26]) box(x, 0.083, 45, 0.1, 0.018, 4.6, "#e7dfb8");
+  for (const dx of [-0.82, 0.82])
+    box(33 + dx, 0.082, 48, 0.29, 0.018, 2.55, "#e9dfb6");
+  box(33, 0.083, 48, 1.9, 0.018, 0.29, "#e9dfb6");
+  for (const x of [-71, 71]) box(x, 0.04, -9, 4.4, 0.1, 102, "#667572");
   // Welcome terrace descends continuously toward the main plaza.
   for (let j = 0; j < 21; j++) {
     const z = 29 + j * 0.63,

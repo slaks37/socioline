@@ -28,7 +28,7 @@ function Brand() {
   return (
     <Link prefetch={false} className="brand" href="/">
       <img
-        src="/socioline.webp"
+        src="/socioline-sl.svg"
         width="75"
         height="42"
         style={{ objectFit: "contain" }}
@@ -49,7 +49,7 @@ export default function Root({ children }: { children: React.ReactNode }) {
               "@type": "Organization",
               name: "SocioLine",
               url: base.href,
-              logo: new URL("/socioline.webp", base).href,
+              logo: new URL("/socioline-sl.svg", base).href,
             }),
           }}
         />

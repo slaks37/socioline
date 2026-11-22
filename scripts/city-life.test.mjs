@@ -41,3 +41,30 @@ test("work, deliveries, business, friendship and rest use earned resources", () 
   perform("decorate");
   assert.equal(state.decor, 1);
 });
+test("timed crops, livestock and business upgrades work with an earlier save", () => {
+  let s = { ...freshLife };
+  const use = (key, now = 1000) => {
+    s = act(s, key, now).state;
+    assert(validLife(s));
+  };
+  use("sow");
+  use("harvest");
+  assert.equal(s.supplies, 1);
+  use("harvest", 31000);
+  assert.equal(s.supplies, 4);
+  use("herd");
+  use("feed");
+  use("milk");
+  assert.equal(s.stock, 0);
+  use("milk", 21000);
+  assert.equal(s.stock, 2);
+  use("milk", 21000);
+  assert.equal(s.stock, 2);
+  use("craft");
+  use("wholesale");
+  assert.equal(s.coins, 19);
+  assert.equal(s.stock, 0);
+  use("expand");
+  use("craft");
+  assert.equal(s.stock, 2);
+});
