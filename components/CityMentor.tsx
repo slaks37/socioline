@@ -50,8 +50,8 @@ export default function CityMentor({ site, life }: { site: Site; life: Life }) {
             energi. Dengan persediaanmu, beli {buy} bahan seharga {buy * 2}{" "}
             koin. Penjualan eceran {units} produk menghasilkan {units * 5} koin.
           </p>
-          <a href="/the-work/mission-model" target="_blank" rel="noreferrer">
-            Pelajari model bisnis
+          <a href="/resources/canvas/8" target="_blank" rel="noreferrer">
+            Isi Business Model Canvas
           </a>
         </>
       ) : (

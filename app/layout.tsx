@@ -18,6 +18,7 @@ import "./style.css";
 import { base } from "../lib/seo";
 export const metadata: Metadata = {
   metadataBase: base,
+  icons: { icon: { url: "/socioline-sl.svg", type: "image/svg+xml" } },
   title: {
     default: "SocioLine Digital World",
     template: "%s | SocioLine Digital World",
