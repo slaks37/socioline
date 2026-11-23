@@ -112,8 +112,8 @@ export default function AvatarStudio({
 }) {
   const [panel, setPanel] = useState<(typeof panels)[number]>("Wajah");
   const [view, setView] = useState<"model" | "reference">("model");
-  const [rotation, rotate] = useState(0.24);
-  const [portrait, zoom] = useState(false);
+  const [rotation, rotate] = useState(0.15);
+  const [portrait, zoom] = useState(true);
   const look = resolveLook(avatar);
   const { collection, female } = look;
   const gender = female ? "female" : "male";
@@ -141,7 +141,10 @@ export default function AvatarStudio({
               aria-pressed={collection === key}
               onClick={() => {
                 if (key !== collection)
-                  previewChange(selectCollection(avatar, key), false);
+                  previewChange(
+                    selectCollection(avatar, key),
+                    panel === "Wajah",
+                  );
               }}
             >
               <img
@@ -249,7 +252,10 @@ export default function AvatarStudio({
                   aria-pressed={avatar.preset === preset}
                   onClick={() => {
                     if (preset !== avatar.preset)
-                      previewChange(selectBase(avatar, preset), false);
+                      previewChange(
+                        selectBase(avatar, preset),
+                        panel === "Wajah",
+                      );
                   }}
                 >
                   {preset === "Male" ? "Laki-laki" : "Perempuan"}
@@ -267,7 +273,10 @@ export default function AvatarStudio({
                 type="button"
                 key={p}
                 aria-pressed={p === panel}
-                onClick={() => setPanel(p)}
+                onClick={() => {
+                  setPanel(p);
+                  if (p === "Wajah" || p === "Pakaian") zoom(p === "Wajah");
+                }}
               >
                 {p}
               </button>

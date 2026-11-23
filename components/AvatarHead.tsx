@@ -3,7 +3,8 @@ import { useMemo, useEffect } from "react";
 import * as T from "three";
 import { useLoader } from "@react-three/fiber";
 import { measure, resolveLook, type AvatarData } from "./avatar-data";
-import { faceGeometry, faceTexture } from "./avatar-face";
+import { faceGeometry, earGeometry } from "./avatar-face";
+import { faceArt, facePaint } from "./avatar-face-paint";
 import { hairGeometry } from "./avatar-hair";
 import HeadAccessory from "./HeadAccessory";
 
@@ -23,37 +24,43 @@ export default function AvatarHead({ data }: { data: AvatarData }) {
     eyes = measure(data, "eyes"),
     spacing = measure(data, "spacing"),
     mouth = measure(data, "mouth");
+  const art = useMemo(
+    () => faceArt(collection, female, faceIndex),
+    [collection, female, faceIndex],
+  );
   const sculpt = useMemo(
     () => faceGeometry(female, faceIndex, jaw, nose),
     [female, faceIndex, jaw, nose],
   );
-  const [eyeArt, fiber] = useLoader(T.TextureLoader, [
-    `/avatar-materials/eye-${female ? "f" : "m"}.webp`,
-    "/avatar-materials/hair-fiber.webp",
-  ]);
+  const atlas = useLoader(T.TextureLoader, art.src);
+  const fiber = useLoader(T.TextureLoader, "/avatar-materials/hair-fiber.webp");
   const paint = useMemo(
     () =>
-      faceTexture(
+      facePaint(
+        atlas,
         collection,
         female,
         faceIndex,
+        art.base,
         skin,
         hairColor,
         eyes,
         spacing,
         mouth,
-        eyeArt.image,
+        nose,
       ),
     [
+      atlas,
       collection,
       female,
       faceIndex,
+      art.base,
       skin,
       hairColor,
       eyes,
       spacing,
       mouth,
-      eyeArt,
+      nose,
     ],
   );
   const hood =
@@ -65,6 +72,8 @@ export default function AvatarHead({ data }: { data: AvatarData }) {
     () => (hood ? null : hairGeometry(style, hairColor, female)),
     [hood, style, hairColor, female],
   );
+  const ear = useMemo(() => earGeometry(), []);
+  useEffect(() => () => ear.dispose(), [ear]);
   useEffect(() => () => sculpt.dispose(), [sculpt]);
   useEffect(() => () => paint.dispose(), [paint]);
   useEffect(() => () => coiffure?.dispose(), [coiffure]);
@@ -81,37 +90,17 @@ export default function AvatarHead({ data }: { data: AvatarData }) {
       <mesh geometry={sculpt} scale={1.011}>
         <meshBasicMaterial color="#51323b" side={T.BackSide} />
       </mesh>
-      <mesh geometry={sculpt} castShadow receiveShadow>
-        <meshLambertMaterial
-          vertexColors
-          map={paint}
-          color="#c4b9bd"
-          emissive="#ffffff"
-          emissiveMap={paint}
-          emissiveIntensity={0.48}
-          toneMapped={false}
-        />
-      </mesh>
+      <mesh geometry={sculpt} material={paint} castShadow />
       {[-1, 1].map((side) => (
-        <group
+        <mesh
           key={side}
-          position={[side * 0.152, -0.011, -0.003]}
-          rotation-z={-side * 0.22}
+          geometry={ear}
+          scale-x={side}
+          position={[side * 0.157, -0.006, 0.006]}
+          rotation-z={-side * 0.2}
         >
-          <mesh scale={[0.026, 0.047, 0.025]}>
-            <sphereGeometry args={[1, 14, 12]} />
-            <meshBasicMaterial color={skin} />
-          </mesh>
-          <mesh
-            position={[side * 0.021, 0.002, 0.007]}
-            scale={[0.003, 0.024, 0.011]}
-          >
-            <sphereGeometry args={[1, 10, 8]} />
-            <meshBasicMaterial
-              color={new T.Color(skin).lerp(new T.Color("#9d5b54"), 0.34)}
-            />
-          </mesh>
-        </group>
+          <meshBasicMaterial color={skin} vertexColors />
+        </mesh>
       ))}
       {coiffure && (
         <mesh geometry={coiffure} castShadow>

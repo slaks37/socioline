@@ -89,10 +89,10 @@ export function hairGeometry(style: string, color: string, female: boolean) {
         const tone =
           c <= 0
             ? 0.035
-            : 0.1 +
-              0.39 * c +
+            : 0.15 +
+              0.33 * c +
               glint +
-              0.065 * strand * c +
+              0.037 * strand * c +
               0.22 * highlightBand * c;
         vertex(pt.x, pt.y, pt.z, tone);
       }
@@ -116,7 +116,7 @@ export function hairGeometry(style: string, color: string, female: boolean) {
         const p = t * edge;
         // The skull is broader above the temples and occiput than a sphere.
         // Keep the inner cap outside the cranium without lifting the fringe.
-        const clearance = (0.012 + 0.008 * rear) * Math.sin(p) ** 2;
+        const clearance = (0.022 + 0.012 * rear) * Math.sin(p) ** 2;
         const [x, y, z] = scalp(a, p, clearance);
         const channel =
           a * (braided ? 33 : 20) + (1 - t) ** 2 * (sidePart ? 5.5 : 3.1);
@@ -135,74 +135,69 @@ export function hairGeometry(style: string, color: string, female: boolean) {
   }
   cap();
   if (long) {
-    // Wavy mane with a continuous lining, so even a rear camera sees a filled silhouette.
-    const rows = 32,
-      cols = 66,
+    // Each sweep runs from crown to tip. A single continuous surface outside
+    // the scalp avoids a hard horizontal seam at the temples in profile.
+    const rows = 64,
+      cols = 112,
       start = pos.length / 3;
-    function wavePoint(a: number, t: number, layer: number): Point {
-      const sweep = a + 0.1 * Math.sin(8 * t + a) * Math.sin(Math.PI * t);
-      const side = Math.abs(Math.sin(sweep)),
-        tail = ease(t, 0.21, 0.65);
-      const r =
-        0.155 +
-        0.022 * Math.sin(Math.PI * t) +
-        tail * (0.045 + 0.036 * Math.sin(t * 10.6 + a * 0.6));
-      const drop = 0.49 + 0.06 * Math.cos(a * 3.4) + 0.018 * Math.cos(a * 8.3);
+    function wavePoint(a: number, t: number, layer = 0): Point {
+      const strand = Math.cos(19 * a);
+      const drop = 0.422 + 0.038 * Math.cos(3 * a) + 0.04 * strand;
+      const y = 0.224 - (0.224 + drop) * t;
+      const body = ease(t, 0.17, 0.59);
+      const wave =
+        0.028 * Math.sin(10.1 * t + 0.81 * a) +
+        0.014 * Math.sin(16 * t - 0.75 * a);
+      const theta = a - 0.4 * (1 - t) ** 2 + 0.075 * Math.sin(7 * t + a) * body;
+      const crown = Math.sqrt(
+        Math.max(0, 1 - Math.max(0, (y - 0.011) / 0.231) ** 2),
+      );
+      const radius =
+        crown * (0.209 + 0.006 * strand + layer) + body * (0.013 + wave);
       return [
-        Math.sin(sweep) * (r + layer),
-        0.127 - (0.127 + drop) * t,
-        -0.025 +
-          Math.cos(sweep) * (r + layer) +
-          tail * (0.025 * Math.sin(9 * t + a) + 0.035 * side),
+        Math.sin(theta) * radius,
+        y,
+        -0.022 +
+          Math.cos(theta) * radius +
+          body * (0.012 * Math.sin(8 * t + a) + 0.019 * Math.abs(Math.sin(a))),
       ];
     }
-    for (let j = 0; j <= rows; j++)
+    for (let j = 0; j <= rows; j++) {
+      const t = j / rows;
       for (let i = 0; i <= cols; i++) {
-        const u = i / cols,
-          t = j / rows;
-        const theta = 0.96 + u * (tau - 1.92),
-          a = theta + 0.05 * Math.sin((t - 0.2) * 6 + theta);
-        const [x, y, z] = wavePoint(a, t, 0);
-        const lock = Math.cos(18 * theta + 0.8 * Math.sin(t * 7 + theta));
+        const a = 0.98 + ((tau - 1.96) * i) / cols;
+        const [x, y, z] = wavePoint(a, t);
+        const lock = 0.5 + 0.5 * Math.cos(19 * a);
+        const silk = 0.5 + 0.5 * Math.cos(38 * a + 0.75 * Math.sin(8 * t + a));
+        const reflected = Math.max(
+          0,
+          1 - Math.abs(t - 0.29 - 0.065 * Math.sin(a * 2.2)) * 5,
+        );
         vertex(
           x,
-          y + 0.026 * ease(t, 0.72, 1) * lock,
+          y,
           z,
-          0.25 + 0.11 * lock + 0.12 * Math.cos(5 * t + a),
+          0.24 + 0.24 * lock + 0.07 * silk + 0.17 * reflected * lock,
         );
       }
+    }
     stitch(start, rows, cols);
-    for (let i = 0; i < 23; i++) {
-      const a = 0.98 + (i / 22) * (tau - 1.96);
-      const pts: Point[] = Array.from({ length: 10 }, (_, j) => {
-        const t = j / 9;
-        const p = wavePoint(a + 0.085 * Math.sin(t * 8.6 + i * 0.34), t, 0.012);
-        p[1] -= 0.04 * ease(t, 0.73, 1) * (1 + Math.sin(i * 2.3));
-        return p;
+    for (let i = 0; i < 17; i++) {
+      const a = 1.03 + (i * (tau - 2.06)) / 16;
+      const pts: Point[] = Array.from({ length: 14 }, (_, j) => {
+        const t = j / 13;
+        const pt = wavePoint(a + 0.026 * Math.sin(t * 7 + i), t, 0.006);
+        pt[1] -= 0.031 * ease(t, 0.82, 1) * (1 + Math.cos(i * 2.4));
+        return pt;
       });
       ribbon(
         pts,
-        0.024 + (0.5 + 0.5 * Math.cos(i * 3)) * 0.008,
-        0.012,
-        0.21 * Math.sin(i),
-        1,
-        0.95,
+        0.015 + 0.005 * Math.sin(i * 0.9) ** 2,
+        0.005,
+        0.17 * Math.sin(a),
+        0.78,
+        0.36,
       );
-    }
-    // A continuous outer layer bridges the crown to the long waves down the back.
-    for (let i = 0; i < 21; i++) {
-      const a = 1.18 + ((tau - 2.36) * i) / 20;
-      const pts: Point[] = [
-        scalp(a - 0.22, 0.3, 0.009),
-        scalp(a - 0.15, 0.69, 0.013),
-        scalp(a - 0.07, 1.05, 0.021),
-        scalp(a, 1.3, 0.024),
-      ];
-      for (let j = 0; j <= 6; j++) {
-        const t = 0.22 + (j * (0.39 + 0.1 * Math.sin(i * 4.19))) / 6;
-        pts.push(wavePoint(a + 0.034 * Math.sin(t * 7 + i), t, 0.021));
-      }
-      ribbon(pts, 0.023, 0.007, 0.11 * Math.sin(a), 1, 0.65);
     }
     // The two front locks turn towards the chest, then turn out and back at their tips.
     for (const side of [-1, 1]) {
@@ -346,7 +341,7 @@ export function hairGeometry(style: string, color: string, female: boolean) {
           const pt = scalp(az, p, 0.003 + (0.016 + 0.014 * layer) * fan);
           const lift = (0.018 + 0.014 * layer) * side * tip;
           pt[0] += Math.sin(az) * lift;
-          pt[1] += (0.016 + 0.019 * layer) * fan + lift * (0.6 + noise);
+          pt[1] += (0.011 + 0.013 * layer) * fan + lift * (0.6 + noise);
           pt[2] += Math.cos(az) * lift;
           pts.push(pt);
         }
@@ -360,26 +355,62 @@ export function hairGeometry(style: string, color: string, female: boolean) {
         );
       }
     }
-    // Distinct locks fall from the broken centre part across the hairline.
-    const tips = [-0.16, -0.115, -0.075, -0.032, 0.019, 0.081, 0.133];
-    tips.forEach((tip, i) => {
-      const side = i < 4 ? -1 : 1,
-        start = 0.023 + (i - 3) * 0.012;
-      const y = [0.048, 0.063, 0.015, 0.045, 0.091, 0.058, 0.067][i];
+    // Locks sweep from an off-centre part in overlapping arcs. Different
+    // endpoints break up the edge without covering the pupils.
+    const fringe: [Point, Point, Point, number][] = [
+      [
+        [0.037, 0.213, 0.076],
+        [-0.034, 0.157, 0.186],
+        [-0.141, 0.046, 0.153],
+        0.039,
+      ],
+      [
+        [0.028, 0.21, 0.072],
+        [-0.053, 0.143, 0.192],
+        [-0.1, 0.017, 0.166],
+        0.035,
+      ],
+      [
+        [0.047, 0.215, 0.078],
+        [-0.01, 0.161, 0.197],
+        [-0.055, 0.055, 0.184],
+        0.032,
+      ],
+      [
+        [0.053, 0.21, 0.064],
+        [0.083, 0.159, 0.174],
+        [0.145, 0.043, 0.142],
+        0.04,
+      ],
+      [
+        [0.044, 0.207, 0.085],
+        [0.065, 0.131, 0.192],
+        [0.091, 0.032, 0.18],
+        0.029,
+      ],
+      [
+        [-0.071, 0.187, 0.07],
+        [-0.133, 0.106, 0.146],
+        [-0.172, -0.027, 0.084],
+        0.03,
+      ],
+      [
+        [0.11, 0.159, 0.062],
+        [0.158, 0.078, 0.116],
+        [0.166, -0.015, 0.086],
+        0.024,
+      ],
+    ];
+    for (const [root, middle, tip, width] of fringe) {
       ribbon(
-        [
-          [start, 0.211, 0.068],
-          [start - side * 0.018, 0.211, 0.116],
-          [tip * 0.58, 0.166, 0.159],
-          [tip, 0.111, 0.168 - Math.abs(tip) * 0.19],
-          [tip + side * 0.027, y, 0.196 - Math.abs(tip) * 0.25],
-        ],
-        0.024 + Math.abs(Math.sin(i)) * 0.01,
-        0.01,
-        side * 0.19,
-        1,
+        [root, middle, tip],
+        width,
+        0.011,
+        tip[0] < 0 ? -0.14 : 0.16,
+        0.86,
+        0.46,
       );
-    });
+    }
     for (const side of [-1, 1]) {
       for (let k = 0; k < 3; k++) {
         const y = 0.041 + k * 0.046;
